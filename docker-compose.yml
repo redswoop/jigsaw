@@ -1,0 +1,16 @@
+services:
+  jigsaw:
+    container_name: jigsaw
+    image: skywarp75/jigsaw:latest
+    ports:
+      - "1997:80"
+    restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=300
+    restart: unless-stopped
