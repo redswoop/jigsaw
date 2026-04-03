@@ -300,10 +300,20 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
   text-shadow:
     0 2px 16px rgba(0,0,0,0.7),
     0 0 60px rgba(196, 164, 90, 0.3);
+  z-index: 2;
+  position: relative;
+}
+#victory-video {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  z-index: 1;
 }
 @keyframes victoryIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ---- Hamburger menu (mobile only) ---- */
@@ -600,6 +610,8 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
       ></div>
 
       <div v-if="won" id="victory-overlay">
+        <video v-if="victoryVideo" :src="victoryVideo" autoplay loop muted playsinline
+          id="victory-video"></video>
         <h2>Solved!</h2>
       </div>
     </div>
@@ -691,6 +703,9 @@ createApp({
       'card16.png', 'card17.png', 'card18.png', 'card19.png', 'card20.png',
       'card21.png', 'card22.png', 'card23.png',
     ];
+    const VIDEOS = Object.fromEntries(
+      IMAGES.map(img => [img, img.replace('.png', '.mp4')])
+    );
     // ?puzzle=5 selects card5.png (number only, 1-based)
     const urlPuzzle = new URLSearchParams(window.location.search).get('puzzle');
     let initialImg = IMAGES[0];
@@ -794,6 +809,7 @@ createApp({
     const tileW = computed(() => imgW.value / COLS.value);
     const tileH = computed(() => imgH.value / ROWS.value);
     const won = ref(false);
+    const victoryVideo = computed(() => VIDEOS[imgSrc.value] || null);
     const breakGroupsOption = ref(true);
     const scale = ref(1);
 
@@ -1728,7 +1744,7 @@ createApp({
     };
 
     return {
-      tiles, tileW, tileH, won, scale, boardStyle,
+      tiles, tileW, tileH, won, victoryVideo, scale, boardStyle,
       COLS, ROWS, sliderCols, breakGroupsOption,
       dropHighlights, dropValid, draggingTileIds,
       moveCount, canUndo, undo, bugStatus, soundOn, toggleSound,
