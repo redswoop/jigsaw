@@ -116,6 +116,18 @@ body::before {
   letter-spacing: 0.08em;
   color: #c4b08a;
 }
+.sound-toggle {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 5px 8px;
+  color: #c4b08a;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.15s;
+}
+.sound-toggle:hover { background: rgba(255,255,255,0.13); }
 .control-group {
   display: flex;
   flex-direction: column;
@@ -628,6 +640,15 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
       <hr class="divider">
       <span class="moves-label">Moves: {{ moveCount }}</span>
       <button class="undo-btn" @click="undo" :disabled="!canUndo">Undo</button>
+      <button class="sound-toggle" @click="toggleSound" :title="soundOn ? 'Mute' : 'Unmute'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path v-if="soundOn" d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+          <path v-if="soundOn" d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <line v-if="!soundOn" x1="23" y1="9" x2="17" y2="15"/>
+          <line v-if="!soundOn" x1="17" y1="9" x2="23" y2="15"/>
+        </svg>
+      </button>
       <button class="report-bug" @click="reportBug" :disabled="bugStatus === 'sending'">Report Bug</button>
       <div class="bug-status">{{ bugStatus }}</div>
     </div>
@@ -635,6 +656,14 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
     <!-- Mobile: compact inline -->
     <span class="moves-pill mobile-compact" style="display:none">{{ moveCount }} moves</span>
     <button class="undo-btn mobile-compact" style="display:none" @click="undo" :disabled="!canUndo">Undo</button>
+    <button class="sound-toggle mobile-compact" style="display:none" @click="toggleSound" :title="soundOn ? 'Mute' : 'Unmute'">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+        <path v-if="soundOn" d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        <line v-if="!soundOn" x1="23" y1="9" x2="17" y2="15"/>
+        <line v-if="!soundOn" x1="17" y1="9" x2="23" y2="15"/>
+      </svg>
+    </button>
   </div>
 
   <!-- Confirmation modal -->
@@ -676,6 +705,83 @@ createApp({
       const url = new URL(window.location);
       url.searchParams.set('puzzle', num);
       history.replaceState(null, '', url);
+    }
+
+    // --- Sound Effects (Web Audio API) ---
+    let audioCtx = null;
+    const soundOn = ref(localStorage.getItem('jigsaw_sound') !== 'off');
+    let soundEnabled = false;
+    function getAudioCtx() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }
+
+    function toggleSound() {
+      soundOn.value = !soundOn.value;
+      localStorage.setItem('jigsaw_sound', soundOn.value ? 'on' : 'off');
+    }
+
+    function playThump() {
+      if (!soundEnabled || !soundOn.value) return;
+      const ctx = getAudioCtx();
+      const t = ctx.currentTime;
+      // Warm body tone — two detuned sines for woody resonance
+      [150, 120].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        const lp = ctx.createBiquadFilter();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.5, t + 0.1);
+        g.gain.setValueAtTime(i === 0 ? 0.35 : 0.2, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(400, t);
+        osc.connect(lp).connect(g).connect(ctx.destination);
+        osc.start(t); osc.stop(t + 0.15);
+      });
+      // Filtered noise for percussive attack
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.05 | 0, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const ns = ctx.createBufferSource();
+      const ng = ctx.createGain();
+      const bp = ctx.createBiquadFilter();
+      ns.buffer = buf;
+      bp.type = 'bandpass'; bp.frequency.value = 300; bp.Q.value = 1.5;
+      ng.gain.setValueAtTime(0.4, t);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      ns.connect(bp).connect(ng).connect(ctx.destination);
+      ns.start(t);
+    }
+
+    function playClick() {
+      if (!soundEnabled || !soundOn.value) return;
+      const ctx = getAudioCtx();
+      const t = ctx.currentTime;
+      // Sharp noise transient — highpass filtered snap
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.03 | 0, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const ns = ctx.createBufferSource();
+      const ng = ctx.createGain();
+      const hp = ctx.createBiquadFilter();
+      ns.buffer = buf;
+      hp.type = 'highpass'; hp.frequency.value = 2000; hp.Q.value = 0.7;
+      ng.gain.setValueAtTime(0.25, t);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+      ns.connect(hp).connect(ng).connect(ctx.destination);
+      ns.start(t);
+      // Tonal ping for satisfying "lock" feel
+      const osc = ctx.createOscillator();
+      const og = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1100, t);
+      osc.frequency.exponentialRampToValueAtTime(800, t + 0.05);
+      og.gain.setValueAtTime(0.15, t);
+      og.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      osc.connect(og).connect(ctx.destination);
+      osc.start(t); osc.stop(t + 0.08);
     }
 
     const naturalW = ref(0);
@@ -1118,6 +1224,8 @@ createApp({
       }
 
       e.currentTarget.setPointerCapture(e.pointerId);
+      soundEnabled = true;
+      playThump();
     }
 
     function onPointerMove(e) {
@@ -1454,6 +1562,7 @@ createApp({
         tiles[tid].groupId = gIdA;
       }
       delete groups[gIdB];
+      playThump();
     }
 
     function checkWin() {
@@ -1622,7 +1731,7 @@ createApp({
       tiles, tileW, tileH, won, scale, boardStyle,
       COLS, ROWS, sliderCols, breakGroupsOption,
       dropHighlights, dropValid, draggingTileIds,
-      moveCount, canUndo, undo, bugStatus,
+      moveCount, canUndo, undo, bugStatus, soundOn, toggleSound,
       menuOpen, pendingAction,
       tileStyle, tileClasses, newGame, reportBug,
       confirmNewGame, pickDifficulty, confirmYes,
