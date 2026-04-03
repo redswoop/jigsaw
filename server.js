@@ -21,6 +21,7 @@ const MIME = {
   '.jpg': 'image/jpeg',
   '.json': 'application/json',
   '.ico': 'image/x-icon',
+  '.mp4': 'video/mp4',
 };
 
 function sendJson(res, status, data) {
