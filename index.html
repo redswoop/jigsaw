@@ -2,29 +2,51 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Jigsaw</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@300;500;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; overflow: hidden; }
+html { height: -webkit-fill-available; }
 body {
-  background: #1a1a2e;
+  background: #2c2418;
+  background-image:
+    radial-gradient(ellipse at 30% 20%, rgba(78, 60, 38, 0.5) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 80%, rgba(45, 35, 25, 0.8) 0%, transparent 50%);
   display: flex;
   justify-content: center;
   align-items: center;
-  font-family: system-ui, sans-serif;
-  color: #eee;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: #e8dcc8;
   user-select: none;
   -webkit-user-select: none;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
 }
+
+/* Subtle noise texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  pointer-events: none;
+  z-index: 9999;
+}
+
 #app {
   display: flex;
   align-items: center;
-  gap: 32px;
-  padding: 20px;
+  gap: 40px;
+  padding: 24px;
   max-width: 100vw;
   max-height: 100vh;
+  max-height: -webkit-fill-available;
 }
 #board-wrap {
   flex-shrink: 1;
@@ -34,140 +56,336 @@ body {
 }
 #board {
   position: relative;
-  background: #111;
-  border-radius: 4px;
+  background: #1a1510;
+  border-radius: 6px;
   overflow: hidden;
   touch-action: none;
   transform-origin: center center;
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.4),
+    0 12px 40px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .tile {
   position: absolute;
   background-size: var(--img-w) var(--img-h);
   background-repeat: no-repeat;
-  transition: left 0.2s ease, top 0.2s ease;
+  transition: left 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), top 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   cursor: grab;
-  border: 2px solid rgba(255,255,255,0.85);
+  border: 1.5px solid rgba(255,255,255,0.5);
 }
 .tile.dragging {
   z-index: 100;
-  opacity: 0.88;
+  opacity: 0.92;
   transition: none;
   cursor: grabbing;
-  filter: brightness(1.1);
+  filter: brightness(1.08) drop-shadow(0 4px 12px rgba(0,0,0,0.5));
 }
-.tile.no-border-top { border-top: 2px solid transparent; }
-.tile.no-border-bottom { border-bottom: 2px solid transparent; }
-.tile.no-border-left { border-left: 2px solid transparent; }
-.tile.no-border-right { border-right: 2px solid transparent; }
+.tile.no-border-top { border-top: 1.5px solid transparent; }
+.tile.no-border-bottom { border-bottom: 1.5px solid transparent; }
+.tile.no-border-left { border-left: 1.5px solid transparent; }
+.tile.no-border-right { border-right: 1.5px solid transparent; }
 
 .drop-highlight {
   position: absolute;
-  background: rgba(100, 255, 100, 0.15);
-  border: 2px solid rgba(100, 255, 100, 0.4);
+  background: rgba(200, 180, 120, 0.12);
+  border: 1.5px solid rgba(200, 180, 120, 0.35);
   border-radius: 2px;
   pointer-events: none;
   z-index: 50;
 }
 .drop-highlight.invalid {
-  background: rgba(255, 80, 80, 0.15);
-  border-color: rgba(255, 80, 80, 0.4);
+  background: rgba(180, 80, 60, 0.12);
+  border-color: rgba(180, 80, 60, 0.35);
 }
+
+/* ---- Sidebar (desktop) ---- */
 
 #sidebar {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
   min-width: 200px;
+  max-width: 220px;
 }
 #sidebar h1 {
-  font-size: 1.4rem;
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 1.8rem;
   font-weight: 300;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  opacity: 0.7;
+  letter-spacing: 0.08em;
+  color: #c4b08a;
 }
 .control-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .control-group label {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  opacity: 0.5;
+  letter-spacing: 0.1em;
+  color: #8a7d6a;
+  font-weight: 500;
 }
 .control-group .value {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-variant-numeric: tabular-nums;
+  color: #d4c5a8;
+  font-weight: 500;
 }
+
+/* Custom range slider */
 .control-group input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
-  accent-color: #7c6fef;
+  height: 4px;
+  background: #3d3428;
+  border-radius: 2px;
+  outline: none;
+  margin: 4px 0;
 }
+.control-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #c4a45a;
+  cursor: pointer;
+  border: 2px solid #2c2418;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  transition: transform 0.15s ease;
+}
+.control-group input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.control-group input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #c4a45a;
+  cursor: pointer;
+  border: 2px solid #2c2418;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
 .control-group .checkbox-label {
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  font-size: 0.85rem;
-  opacity: 0.8;
+  font-size: 0.8rem;
+  color: #9a8d78;
 }
+.control-group .checkbox-label input[type="checkbox"] {
+  accent-color: #c4a45a;
+}
+
+/* Buttons */
 button.new-game {
   padding: 10px 20px;
-  background: #7c6fef;
-  color: white;
+  background: linear-gradient(135deg, #c4a45a, #a8893e);
+  color: #1a1510;
   border: none;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
   cursor: pointer;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
-button.new-game:hover { background: #6a5bd4; }
-button.new-game.restart { background: #4a4a5a; }
-button.new-game.restart:hover { background: #5a5a6a; }
+button.new-game:hover {
+  background: linear-gradient(135deg, #d4b46a, #b8994e);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+button.new-game:active {
+  transform: translateY(0);
+}
+button.new-game.restart {
+  background: transparent;
+  color: #9a8d78;
+  border: 1.5px solid #4a3f32;
+  box-shadow: none;
+}
+button.new-game.restart:hover {
+  background: rgba(255,255,255,0.04);
+  color: #c4b08a;
+  border-color: #5a4f42;
+}
 button.report-bug {
-  padding: 8px 16px;
-  background: #e74c3c;
-  color: white;
-  border: none;
+  padding: 7px 14px;
+  background: transparent;
+  color: #7a6d5a;
+  border: 1px solid #3d3428;
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   cursor: pointer;
-  letter-spacing: 0.03em;
-  opacity: 0.7;
+  letter-spacing: 0.04em;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  transition: all 0.2s ease;
 }
-button.report-bug:hover { background: #c0392b; opacity: 1; }
-button.report-bug:disabled { opacity: 0.4; cursor: default; }
+button.report-bug:hover { background: rgba(180,80,60,0.1); color: #a8806a; border-color: #5a4030; }
+button.report-bug:disabled { opacity: 0.3; cursor: default; }
 .bug-status {
-  font-size: 0.75rem;
-  opacity: 0.6;
+  font-size: 0.7rem;
+  color: #6a5d4a;
   min-height: 1.2em;
 }
+
+.moves-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #8a7d6a;
+  font-weight: 500;
+}
+.divider {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  margin: 4px 0;
+}
+
+/* ---- Victory ---- */
 
 #victory-overlay {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: transparent;
+  background: radial-gradient(ellipse at center, rgba(196, 164, 90, 0.08) 0%, transparent 70%);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  padding-bottom: 20px;
+  padding-bottom: 28px;
   z-index: 200;
-  border-radius: 4px;
-  animation: fadeIn 0.5s ease;
+  border-radius: 6px;
+  animation: victoryIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
 }
 #victory-overlay h2 {
-  font-size: 2rem;
-  font-weight: 600;
-  text-shadow: 0 2px 12px rgba(0,0,0,0.8), 0 0 40px rgba(255,255,255,0.3);
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 2.4rem;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  color: #f0e6cc;
+  text-shadow:
+    0 2px 16px rgba(0,0,0,0.7),
+    0 0 60px rgba(196, 164, 90, 0.3);
 }
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@keyframes victoryIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Mobile layout ---- */
+
+@media (max-width: 768px), (max-height: 500px) and (orientation: landscape) {
+  #app {
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    height: 100vh;
+    height: -webkit-fill-available;
+  }
+
+  #sidebar {
+    order: -1;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    min-width: unset;
+    max-width: unset;
+    width: 100%;
+    padding: 10px 16px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    background: rgba(30, 24, 16, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    z-index: 10;
+  }
+  #sidebar h1 {
+    font-size: 1.1rem;
+    margin-right: auto;
+    white-space: nowrap;
+  }
+
+  /* Hide verbose controls on mobile */
+  .control-group.pieces-control { display: none; }
+  .control-group.break-control { display: none; }
+  .control-group.footer-control { display: none; }
+
+  .mobile-compact {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .moves-pill {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #9a8d78;
+    background: rgba(255,255,255,0.05);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  button.new-game {
+    padding: 7px 14px;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  button.new-game.restart {
+    padding: 7px 10px;
+    font-size: 0.72rem;
+  }
+
+  #board-wrap {
+    flex: 1;
+    min-height: 0;
+    padding: 8px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #victory-overlay h2 {
+    font-size: 1.6rem;
+  }
+}
+
+/* Landscape mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+  #app {
+    flex-direction: row;
+  }
+  #sidebar {
+    flex-direction: column;
+    width: auto;
+    height: 100%;
+    padding: 8px 12px;
+    border-bottom: none;
+    border-right: 1px solid rgba(255,255,255,0.05);
+    gap: 6px;
+  }
+  #sidebar h1 { margin-right: 0; font-size: 1rem; }
+  #board-wrap { padding: 8px; }
+}
+
+/* Extra small phones */
+@media (max-width: 380px) {
+  button.new-game.restart { display: none; }
+}
+
+@media (prefers-color-scheme: light) {
+  /* Keep dark — puzzle apps feel better dark */
 }
 </style>
 </head>
@@ -206,23 +424,29 @@ button.report-bug:disabled { opacity: 0.4; cursor: default; }
 
   <div id="sidebar">
     <h1>Jigsaw</h1>
-    <div class="control-group">
+
+    <!-- Desktop: full controls -->
+    <div class="control-group pieces-control">
       <label>Pieces</label>
       <div class="value">{{ COLS }} &times; {{ ROWS }} = {{ COLS * ROWS }}</div>
       <input type="range" :min="2" :max="16" v-model.number="sliderCols">
     </div>
-    <div class="control-group">
+    <div class="control-group break-control">
       <label class="checkbox-label">
         <input type="checkbox" v-model="breakGroupsOption"> Break groups on drop
       </label>
     </div>
     <button class="new-game" @click="newGame(false)">New Game</button>
     <button class="new-game restart" @click="newGame(true)">Restart</button>
-    <div class="control-group" style="margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
-      <label>Moves: {{ moveCount }}</label>
+    <div class="control-group footer-control">
+      <hr class="divider">
+      <span class="moves-label">Moves: {{ moveCount }}</span>
       <button class="report-bug" @click="reportBug" :disabled="bugStatus === 'sending'">Report Bug</button>
       <div class="bug-status">{{ bugStatus }}</div>
     </div>
+
+    <!-- Mobile: compact inline -->
+    <span class="moves-pill mobile-compact" style="display:none">{{ moveCount }} moves</span>
   </div>
 </div>
 
@@ -286,10 +510,27 @@ createApp({
 
     function computeScale() {
       if (!naturalW.value || !naturalH.value) return;
-      const sidebarWidth = 260;
-      const padding = 80;
-      const availW = window.innerWidth - sidebarWidth - padding;
-      const availH = window.innerHeight - padding;
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      const isMobile = W <= 768 || (H <= 500 && W > H);
+      const isLandscapeMobile = H <= 500 && W > H;
+
+      let availW, availH;
+      if (isMobile && !isLandscapeMobile) {
+        // Portrait mobile: full width, subtract toolbar height + padding
+        availW = W - 16;
+        availH = H - 56;
+      } else if (isLandscapeMobile) {
+        // Landscape mobile: subtract sidebar width
+        availW = W - 140;
+        availH = H - 16;
+      } else {
+        // Desktop
+        const sidebarWidth = 280;
+        const padding = 80;
+        availW = W - sidebarWidth - padding;
+        availH = H - padding;
+      }
       const sx = availW / naturalW.value;
       const sy = availH / naturalH.value;
       scale.value = Math.min(sx, sy, 1);
