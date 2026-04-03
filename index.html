@@ -706,12 +706,19 @@ createApp({
     const VIDEOS = Object.fromEntries(
       IMAGES.map(img => [img, img.replace('.png', '.mp4')])
     );
-    // ?puzzle=5 selects card5.png (number only, 1-based)
-    const urlPuzzle = new URLSearchParams(window.location.search).get('puzzle');
+    // ?puzzle=5&cols=4 selects card5.png at 4 columns
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlPuzzle = urlParams.get('puzzle');
+    const urlCols = urlParams.get('cols');
     let initialImg = IMAGES[0];
+    let initialCols = null;
     if (urlPuzzle && /^\d+$/.test(urlPuzzle)) {
       const idx = parseInt(urlPuzzle, 10) - 1;
       if (idx >= 0 && idx < IMAGES.length) initialImg = IMAGES[idx];
+    }
+    if (urlCols && /^\d+$/.test(urlCols)) {
+      const c = parseInt(urlCols, 10);
+      if (c >= 2 && c <= 16) initialCols = c;
     }
     const imgSrc = ref(initialImg);
 
@@ -719,6 +726,7 @@ createApp({
       const num = IMAGES.indexOf(imgSrc.value) + 1;
       const url = new URL(window.location);
       url.searchParams.set('puzzle', num);
+      url.searchParams.set('cols', sliderCols.value);
       history.replaceState(null, '', url);
     }
 
@@ -801,7 +809,7 @@ createApp({
 
     const naturalW = ref(0);
     const naturalH = ref(0);
-    const sliderCols = ref(8);
+    const sliderCols = ref(initialCols || 8);
     const COLS = ref(8);
     const ROWS = ref(10);
     const imgW = computed(() => naturalW.value);
