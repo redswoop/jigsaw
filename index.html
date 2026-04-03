@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Jigsaw</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@300;500;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10,7 +10,7 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; overflow: hidden; }
-html { height: -webkit-fill-available; }
+html { height: -webkit-fill-available; touch-action: manipulation; }
 body {
   background: #2c2418;
   background-image:
@@ -280,6 +280,156 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ---- Hamburger menu (mobile only) ---- */
+
+.hamburger-btn {
+  display: none; /* shown via media query */
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  flex-shrink: 0;
+}
+.hamburger-btn span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: #c4b08a;
+  margin: 3px 0;
+  border-radius: 1px;
+  transition: all 0.2s ease;
+}
+.hamburger-btn.open span:nth-child(1) {
+  transform: rotate(45deg) translate(3px, 4px);
+}
+.hamburger-btn.open span:nth-child(2) {
+  opacity: 0;
+}
+.hamburger-btn.open span:nth-child(3) {
+  transform: rotate(-45deg) translate(3px, -4px);
+}
+
+.mobile-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: rgba(30, 24, 16, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 100;
+  animation: menuSlide 0.2s ease;
+}
+@keyframes menuSlide {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.mobile-menu button {
+  background: none;
+  border: none;
+  color: #d4c5a8;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.9rem;
+  padding: 12px 16px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+.mobile-menu button:hover,
+.mobile-menu button:active {
+  background: rgba(255,255,255,0.06);
+}
+.mobile-menu .menu-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #6a5d4a;
+  padding: 8px 16px 4px;
+  font-weight: 600;
+}
+.mobile-menu .menu-divider {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  margin: 4px 0;
+}
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+}
+
+/* ---- Confirmation modal ---- */
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  animation: fadeIn 0.15s ease;
+}
+.confirm-dialog {
+  background: #2c2418;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 24px 28px;
+  max-width: 300px;
+  width: 90%;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+}
+.confirm-dialog p {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 1rem;
+  color: #d4c5a8;
+  margin-bottom: 20px;
+  line-height: 1.4;
+}
+.confirm-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.confirm-buttons button {
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+.confirm-buttons .confirm-yes {
+  background: linear-gradient(135deg, #c4a45a, #a8893e);
+  color: #1a1510;
+}
+.confirm-buttons .confirm-yes:hover {
+  background: linear-gradient(135deg, #d4b46a, #b8994e);
+}
+.confirm-buttons .confirm-cancel {
+  background: transparent;
+  color: #9a8d78;
+  border: 1.5px solid #4a3f32;
+}
+.confirm-buttons .confirm-cancel:hover {
+  background: rgba(255,255,255,0.04);
+  color: #c4b08a;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* ---- Mobile layout ---- */
 
 @media (max-width: 768px), (max-height: 500px) and (orientation: landscape) {
@@ -319,6 +469,10 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
   .control-group.pieces-control { display: none; }
   .control-group.break-control { display: none; }
   .control-group.footer-control { display: none; }
+  button.new-game.desktop-only { display: none; }
+  button.new-game.restart { display: none; }
+
+  .hamburger-btn { display: block; }
 
   .mobile-compact {
     display: flex !important;
@@ -336,14 +490,11 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
     font-variant-numeric: tabular-nums;
   }
 
-  button.new-game {
+  button.new-game.mobile-new {
+    display: inline-block !important;
     padding: 7px 14px;
     font-size: 0.78rem;
     border-radius: 6px;
-  }
-  button.new-game.restart {
-    padding: 7px 10px;
-    font-size: 0.72rem;
   }
 
   #board-wrap {
@@ -425,6 +576,20 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
   <div id="sidebar">
     <h1>Jigsaw</h1>
 
+    <!-- Mobile: hamburger menu -->
+    <button class="hamburger-btn" :class="{ open: menuOpen }" @click.stop="menuOpen = !menuOpen">
+      <span></span><span></span><span></span>
+    </button>
+    <div v-if="menuOpen" class="menu-backdrop" @click="menuOpen = false"></div>
+    <div v-if="menuOpen" class="mobile-menu" @click.stop>
+      <div class="menu-label">Difficulty</div>
+      <button @click="pickDifficulty(4)">Easy <span style="opacity:0.4; font-size:0.75rem; margin-left:4px">20 pieces</span></button>
+      <button @click="pickDifficulty(6)">Medium <span style="opacity:0.4; font-size:0.75rem; margin-left:4px">48 pieces</span></button>
+      <button @click="pickDifficulty(8)">Hard <span style="opacity:0.4; font-size:0.75rem; margin-left:4px">88 pieces</span></button>
+      <hr class="menu-divider">
+      <button @click="menuOpen = false; reportBug()">Report Bug</button>
+    </div>
+
     <!-- Desktop: full controls -->
     <div class="control-group pieces-control">
       <label>Pieces</label>
@@ -436,8 +601,9 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
         <input type="checkbox" v-model="breakGroupsOption"> Break groups on drop
       </label>
     </div>
-    <button class="new-game" @click="newGame(false)">New Game</button>
-    <button class="new-game restart" @click="newGame(true)">Restart</button>
+    <button class="new-game desktop-only" @click="confirmNewGame(false)">New Game</button>
+    <button class="new-game restart" @click="confirmNewGame(true)">Restart</button>
+    <button class="new-game mobile-new" style="display:none" @click="confirmNewGame(false)">New Game</button>
     <div class="control-group footer-control">
       <hr class="divider">
       <span class="moves-label">Moves: {{ moveCount }}</span>
@@ -447,6 +613,17 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
 
     <!-- Mobile: compact inline -->
     <span class="moves-pill mobile-compact" style="display:none">{{ moveCount }} moves</span>
+  </div>
+
+  <!-- Confirmation modal -->
+  <div v-if="pendingAction" class="confirm-overlay" @click="pendingAction = null">
+    <div class="confirm-dialog" @click.stop>
+      <p>Abandon current puzzle?</p>
+      <div class="confirm-buttons">
+        <button class="confirm-cancel" @click="pendingAction = null">Cancel</button>
+        <button class="confirm-yes" @click="confirmYes">Yes</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -463,7 +640,21 @@ createApp({
       'card16.png', 'card17.png', 'card18.png', 'card19.png', 'card20.png',
       'card21.png', 'card22.png', 'card23.png',
     ];
-    const imgSrc = ref(IMAGES[0]);
+    // ?puzzle=5 selects card5.png (number only, 1-based)
+    const urlPuzzle = new URLSearchParams(window.location.search).get('puzzle');
+    let initialImg = IMAGES[0];
+    if (urlPuzzle && /^\d+$/.test(urlPuzzle)) {
+      const idx = parseInt(urlPuzzle, 10) - 1;
+      if (idx >= 0 && idx < IMAGES.length) initialImg = IMAGES[idx];
+    }
+    const imgSrc = ref(initialImg);
+
+    function updatePuzzleParam() {
+      const num = IMAGES.indexOf(imgSrc.value) + 1;
+      const url = new URL(window.location);
+      url.searchParams.set('puzzle', num);
+      history.replaceState(null, '', url);
+    }
 
     const naturalW = ref(0);
     const naturalH = ref(0);
@@ -496,6 +687,10 @@ createApp({
     const moveLog = [];
     const gameStartedAt = ref(new Date().toISOString());
     const bugStatus = ref('');
+
+    // Mobile menu & confirmation
+    const menuOpen = ref(false);
+    const pendingAction = ref(null);
 
     // Drag state
     let dragGroupId = null;
@@ -562,15 +757,48 @@ createApp({
         gameStartedAt.value = new Date().toISOString();
         initGame();
         saveState();
+        updatePuzzleParam();
         nextTick(computeScale);
       };
       img.src = imgSrc.value;
     }
 
     // Re-shuffle with same image when slider changes
-    watch(sliderCols, () => {
-      newGame(true);
+    let sliderGuard = false;
+    watch(sliderCols, (newVal, oldVal) => {
+      if (sliderGuard) { sliderGuard = false; return; }
+      if (moveCount.value > 0) {
+        pendingAction.value = () => newGame(true);
+        sliderGuard = true;
+        sliderCols.value = oldVal; // revert until confirmed
+      } else {
+        newGame(true);
+      }
     });
+
+    function confirmNewGame(keepImage) {
+      if (moveCount.value > 0) {
+        pendingAction.value = () => newGame(keepImage);
+      } else {
+        newGame(keepImage);
+      }
+    }
+
+    function pickDifficulty(cols) {
+      menuOpen.value = false;
+      if (moveCount.value > 0) {
+        pendingAction.value = () => { sliderCols.value = cols; newGame(false); };
+      } else {
+        sliderCols.value = cols;
+        newGame(false);
+      }
+    }
+
+    function confirmYes() {
+      const action = pendingAction.value;
+      pendingAction.value = null;
+      if (action) action();
+    }
 
     function initGame() {
       const R = ROWS.value;
@@ -1189,10 +1417,13 @@ createApp({
         if (!restoreState()) {
           newGame();
         }
+        updatePuzzleParam();
         nextTick(computeScale);
       };
       img.src = savedImg;
       window.addEventListener('resize', onResize);
+      // Prevent pinch-zoom on iOS Safari
+      document.addEventListener('gesturestart', function(e) { e.preventDefault(); });
     });
 
     onUnmounted(() => {
@@ -1321,7 +1552,9 @@ createApp({
       COLS, ROWS, sliderCols, breakGroupsOption,
       dropHighlights, dropValid, draggingTileIds,
       moveCount, bugStatus,
+      menuOpen, pendingAction,
       tileStyle, tileClasses, newGame, reportBug,
+      confirmNewGame, pickDifficulty, confirmYes,
       onPointerDown, onPointerMove, onPointerUp,
     };
   }
