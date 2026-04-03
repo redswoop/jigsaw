@@ -921,7 +921,7 @@ createApp({
     let sliderGuard = false;
     watch(sliderCols, (newVal, oldVal) => {
       if (sliderGuard) { sliderGuard = false; return; }
-      if (moveCount.value > 0) {
+      if (moveCount.value > 0 && !won.value) {
         pendingAction.value = () => newGame(true);
         sliderGuard = true;
         sliderCols.value = oldVal; // revert until confirmed
@@ -931,7 +931,7 @@ createApp({
     });
 
     function confirmNewGame(keepImage) {
-      if (moveCount.value > 0) {
+      if (moveCount.value > 0 && !won.value) {
         pendingAction.value = () => newGame(keepImage);
       } else {
         newGame(keepImage);
@@ -940,7 +940,7 @@ createApp({
 
     function pickDifficulty(cols) {
       menuOpen.value = false;
-      if (moveCount.value > 0) {
+      if (moveCount.value > 0 && !won.value) {
         pendingAction.value = () => { sliderCols.value = cols; newGame(false); };
       } else {
         sliderCols.value = cols;
