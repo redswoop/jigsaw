@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+#
+# CLI tool for viewing jigsaw bug reports.
+#
+# Usage:
+#   ./bugs                     List all bug reports
+#   ./bugs <id>                Show full bug report
+#   ./bugs <id> grid           Show ASCII grid
+#   ./bugs <id> moves          Show move log
+#   ./bugs <id> delete         Delete a bug report
+#
+# Set JIGSAW_URL to point to a remote server (default: http://localhost:8080)
+
+set -euo pipefail
+
+URL="${JIGSAW_URL:-http://localhost:8080}"
+
+if [ $# -eq 0 ]; then
+  # List all bugs
+  echo "Bug reports from $URL:"
+  echo ""
+  curl -sf "$URL/api/bugs" | python3 -c "
+import sys, json
+bugs = json.load(sys.stdin)
+if not bugs:
+    print('  (none)')
+    sys.exit(0)
+for b in bugs:
+    integrity = b.get('integrity', '?')
+    flag = ' !! INTEGRITY FAIL' if isinstance(integrity, list) else ''
+    print(f\"  {b['id']}  {b.get('grid','?'):>5}  {b.get('moves','?'):>3} moves  {b.get('image','?')}{flag}\")
+"
+  exit 0
+fi
+
+ID="$1"
+ACTION="${2:-show}"
+
+case "$ACTION" in
+  show)
+    curl -sf "$URL/api/bugs/$ID" | python3 -m json.tool
+    ;;
+  grid)
+    curl -sf "$URL/api/bugs/$ID" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+g = d.get('game', {})
+print(f\"Image: {g.get('image')}  Grid: {g.get('cols')}x{g.get('rows')}  Moves: {d.get('moves',{}).get('count','?')}\")
+print(f\"Integrity: {d.get('integrity','?')}\")
+print()
+print(d.get('state',{}).get('ascii','(no grid data)'))
+# Show groups with >1 tile
+groups = d.get('state',{}).get('groups',{})
+big = {k:v for k,v in groups.items() if len(v) > 1}
+if big:
+    print('Groups:')
+    for gid, tids in sorted(big.items(), key=lambda x: -len(x[1])):
+        print(f'  group {gid}: {len(tids)} tiles -> {tids}')
+"
+    ;;
+  moves)
+    curl -sf "$URL/api/bugs/$ID" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+moves = d.get('moves', {})
+print(f\"Game started: {moves.get('gameStartedAt','?')}\")
+print(f\"Total moves: {moves.get('count', 0)}\")
+print()
+log = moves.get('log', [])
+if not log:
+    print('(no moves logged)')
+else:
+    for m in log:
+        f = m.get('from',{})
+        t = m.get('to',{})
+        print(f\"  #{m['n']:>3}  group {m.get('groupId','?')} ({m.get('groupSize',1)} tiles)  ({f.get('row')},{f.get('col')}) -> ({t.get('row')},{t.get('col')})\")
+"
+    ;;
+  delete)
+    curl -sf -X DELETE "$URL/api/bugs/$ID" | python3 -m json.tool
+    echo "Deleted $ID"
+    ;;
+  *)
+    echo "Unknown action: $ACTION"
+    echo "Usage: $0 [id] [show|grid|moves|delete]"
+    exit 1
+    ;;
+esac

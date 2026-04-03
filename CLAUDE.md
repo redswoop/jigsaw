@@ -4,13 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development
 
-This is a zero-build single-file web app. No package.json, no bundler, no dependencies to install.
+Single-file web app (`index.html`) with Vite for dev and a Node server for the bug report API.
 
-**Run locally:**
 ```bash
-npx live-server --port=8080    # auto-reloads on file changes
+bun install                    # first time only
+bun run dev                    # Vite (HMR) on :8080 + API server on :3001
 ```
-Then open http://localhost:8080. The live-server enables HMR-like behavior: puzzle state persists across reloads via localStorage (grid positions saved, groups recomputed from adjacency on restore).
+Then open http://localhost:8080. Vite proxies `/api` to the API server. Puzzle state persists via localStorage.
+
+**Production:** `bun run start` (or `node server.js`) serves everything on one port.
 
 **Debug in browser console:**
 ```js
@@ -46,7 +48,21 @@ Tiles are absolutely-positioned divs with `background-image` + `background-posit
 
 ### State Persistence
 
-`saveState()` writes `{rows, cols, grid, img}` to localStorage after every move. On load, `restoreState()` rebuilds tiles from the saved grid and runs `checkMerges()` to reconstruct groups — so code changes to merge/group logic take effect on reload.
+`saveState()` writes `{rows, cols, grid, img, moveCount, moveLog}` to localStorage after every move. On load, `restoreState()` rebuilds tiles from the saved grid and runs `checkMerges()` to reconstruct groups — so code changes to merge/group logic take effect on reload.
+
+### Bug Reporting
+
+The "Report Bug" button in the sidebar captures a full snapshot (grid, tiles, groups, move log, geometry, integrity check, device info) and POSTs it to `/api/bugs`. Bug reports are stored as JSON files in `.bugs/` (or `BUGS_DIR` env var in Docker).
+
+**CLI to inspect bug reports:**
+```bash
+./jigsaw-bugs                  # list all reports
+./jigsaw-bugs <id>             # full JSON dump
+./jigsaw-bugs <id> grid        # ASCII grid + groups
+./jigsaw-bugs <id> moves       # move-by-move log
+./jigsaw-bugs <id> delete      # remove a report
+JIGSAW_URL=http://host:1997 ./jigsaw-bugs   # point at remote server
+```
 
 ## Images
 

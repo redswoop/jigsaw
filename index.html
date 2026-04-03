@@ -125,6 +125,24 @@ button.new-game {
   letter-spacing: 0.03em;
 }
 button.new-game:hover { background: #6a5bd4; }
+button.report-bug {
+  padding: 8px 16px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  opacity: 0.7;
+}
+button.report-bug:hover { background: #c0392b; opacity: 1; }
+button.report-bug:disabled { opacity: 0.4; cursor: default; }
+.bug-status {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  min-height: 1.2em;
+}
 
 #victory-overlay {
   position: absolute;
@@ -197,6 +215,11 @@ button.new-game:hover { background: #6a5bd4; }
       </label>
     </div>
     <button class="new-game" @click="newGame">New Game</button>
+    <div class="control-group" style="margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
+      <label>Moves: {{ moveCount }}</label>
+      <button class="report-bug" @click="reportBug" :disabled="bugStatus === 'sending'">Report Bug</button>
+      <div class="bug-status">{{ bugStatus }}</div>
+    </div>
   </div>
 </div>
 
@@ -234,6 +257,12 @@ createApp({
     const groups = reactive({});
     const grid = reactive([]);
     const tilePos = reactive(new Map());
+
+    // Move tracking
+    const moveCount = ref(0);
+    const moveLog = [];
+    const gameStartedAt = ref(new Date().toISOString());
+    const bugStatus = ref('');
 
     // Drag state
     let dragGroupId = null;
@@ -277,6 +306,9 @@ createApp({
         COLS.value = cols;
         ROWS.value = rows;
         won.value = false;
+        moveCount.value = 0;
+        moveLog.length = 0;
+        gameStartedAt.value = new Date().toISOString();
         initGame();
         saveState();
         nextTick(computeScale);
@@ -344,7 +376,11 @@ createApp({
           flatGrid.push(grid[r][c]);
         }
       }
-      const state = { rows: R, cols: C, grid: flatGrid, img: imgSrc.value };
+      const state = {
+        rows: R, cols: C, grid: flatGrid, img: imgSrc.value,
+        moveCount: moveCount.value, moveLog: moveLog.slice(),
+        gameStartedAt: gameStartedAt.value,
+      };
       try { localStorage.setItem('jigsaw_state', JSON.stringify(state)); } catch(e) {}
     }
 
@@ -404,6 +440,12 @@ createApp({
             tilePos.set(tid, { row: r, col: c });
           }
         }
+
+        // Restore move tracking
+        moveCount.value = state.moveCount || 0;
+        moveLog.length = 0;
+        if (state.moveLog) moveLog.push(...state.moveLog);
+        gameStartedAt.value = state.gameStartedAt || new Date().toISOString();
 
         // Recompute groups from adjacency
         checkMerges();
@@ -581,6 +623,16 @@ createApp({
 
       const result = tryMove(dragGroupId, anchorTargetRow, anchorTargetCol);
       if (result) {
+        moveCount.value++;
+        const anchorOriginPos = dragOriginPositions.get(dragAnchorId);
+        moveLog.push({
+          n: moveCount.value,
+          t: Date.now(),
+          groupId: dragGroupId,
+          groupSize: g.tileIds.size,
+          from: { row: anchorOriginPos.row, col: anchorOriginPos.col },
+          to: { row: anchorTargetRow, col: anchorTargetCol },
+        });
         checkMerges();
         checkWin();
         saveState();
@@ -896,6 +948,99 @@ createApp({
       window.removeEventListener('resize', onResize);
     });
 
+    // --- Bug Reporting ---
+
+    async function reportBug() {
+      if (bugStatus.value === 'sending') return;
+      bugStatus.value = 'sending';
+      try {
+        const R = ROWS.value, C = COLS.value;
+
+        // Capture full grid state
+        const flatGrid = [];
+        for (let r = 0; r < R; r++) {
+          for (let c = 0; c < C; c++) {
+            flatGrid.push(grid[r][c]);
+          }
+        }
+
+        // Capture group state
+        const groupSnapshot = {};
+        for (const [gId, g] of Object.entries(groups)) {
+          groupSnapshot[gId] = [...g.tileIds];
+        }
+
+        // Capture tile state
+        const tileSnapshot = tiles.map(t => ({
+          id: t.id,
+          trueRow: t.trueRow,
+          trueCol: t.trueCol,
+          groupId: t.groupId,
+          pos: tilePos.get(t.id),
+        }));
+
+        // Run integrity check
+        const integrity = checkIntegrity();
+
+        // Build ASCII grid (same as dump())
+        let ascii = '';
+        for (let r = 0; r < R; r++) {
+          ascii += grid[r].map(tid => String(tid).padStart(3)).join(' ') + '\n';
+        }
+
+        const report = {
+          timestamp: new Date().toISOString(),
+          userAgent: navigator.userAgent,
+          screen: { w: screen.width, h: screen.height, dpr: devicePixelRatio },
+          viewport: { w: window.innerWidth, h: window.innerHeight },
+          game: {
+            image: imgSrc.value,
+            rows: R,
+            cols: C,
+            totalTiles: R * C,
+            naturalW: naturalW.value,
+            naturalH: naturalH.value,
+            tileW: tileW.value,
+            tileH: tileH.value,
+            scale: scale.value,
+            won: won.value,
+            breakGroups: breakGroupsOption.value,
+          },
+          moves: {
+            count: moveCount.value,
+            log: moveLog.slice(),
+            gameStartedAt: gameStartedAt.value,
+          },
+          state: {
+            grid: flatGrid,
+            ascii: ascii,
+            tiles: tileSnapshot,
+            groups: groupSnapshot,
+            groupCount: Object.keys(groups).length,
+            nextGroupId: nextGroupId,
+          },
+          integrity: integrity.length ? integrity : 'ok',
+        };
+
+        const res = await fetch('/api/bugs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(report),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          bugStatus.value = `sent #${data.id}`;
+          setTimeout(() => { if (bugStatus.value.startsWith('sent')) bugStatus.value = ''; }, 5000);
+        } else {
+          bugStatus.value = `error ${res.status}`;
+        }
+      } catch (e) {
+        console.error('Bug report failed:', e);
+        bugStatus.value = 'failed (server down?)';
+      }
+    }
+
     // --- Debug ---
     window.dump = function() {
       const R = ROWS.value, C = COLS.value;
@@ -924,7 +1069,8 @@ createApp({
       tiles, tileW, tileH, won, scale, boardStyle,
       COLS, ROWS, sliderCols, breakGroupsOption,
       dropHighlights, dropValid, draggingTileIds,
-      tileStyle, tileClasses, newGame,
+      moveCount, bugStatus,
+      tileStyle, tileClasses, newGame, reportBug,
       onPointerDown, onPointerMove, onPointerUp,
     };
   }

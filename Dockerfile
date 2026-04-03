@@ -8,12 +8,18 @@ RUN echo "bust=${CACHEBUST}" \
     && git clone --depth 1 --branch ${GIT_REF} --single-branch \
        https://github.com/redswoop/jigsaw.git .
 
-# ── Stage 2: Production (static nginx) ──────────────────────
-FROM nginx:alpine
+# ── Stage 2: Production (Node server) ────────────────────────
+FROM node:alpine
 
-COPY --from=builder /app/index.html /usr/share/nginx/html/
-COPY --from=builder /app/card1.png /usr/share/nginx/html/
-COPY --from=builder /app/card2.png /usr/share/nginx/html/
-COPY --from=builder /app/card3.png /usr/share/nginx/html/
+WORKDIR /app
+COPY --from=builder /app/index.html /app/
+COPY --from=builder /app/card1.png /app/
+COPY --from=builder /app/card2.png /app/
+COPY --from=builder /app/card3.png /app/
+COPY --from=builder /app/server.js /app/
 
+ENV PORT=80
+ENV BUGS_DIR=/data/bugs
+VOLUME /data/bugs
 EXPOSE 80
+CMD ["node", "server.js"]

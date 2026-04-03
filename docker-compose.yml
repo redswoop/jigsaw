@@ -4,6 +4,8 @@ services:
     image: skywarp75/jigsaw:latest
     ports:
       - "1997:80"
+    volumes:
+      - bugs:/data/bugs
     restart: unless-stopped
 
   watchtower:
@@ -14,3 +16,6 @@ services:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_POLL_INTERVAL=300
     restart: unless-stopped
+
+volumes:
+  bugs:

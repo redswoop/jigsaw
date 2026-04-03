@@ -1,0 +1,8 @@
+FROM --platform=linux/amd64 node:alpine
+WORKDIR /app
+COPY index.html server.js card1.png card2.png card3.png /app/
+ENV PORT=80
+ENV BUGS_DIR=/data/bugs
+VOLUME /data/bugs
+EXPOSE 80
+CMD ["node", "server.js"]
