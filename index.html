@@ -216,6 +216,20 @@ button.new-game.restart:hover {
   color: #c4b08a;
   border-color: #5a4f42;
 }
+button.undo-btn {
+  padding: 7px 14px;
+  background: rgba(90,70,50,0.15);
+  color: #c4a882;
+  border: 1px solid #5a4030;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  transition: all 0.2s ease;
+  margin-top: 4px;
+}
+button.undo-btn:hover { background: rgba(180,140,80,0.2); color: #d4b892; border-color: #7a6040; }
+button.undo-btn:disabled { opacity: 0.3; cursor: default; }
 button.report-bug {
   padding: 7px 14px;
   background: transparent;
@@ -479,6 +493,12 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
     align-items: center;
     gap: 8px;
   }
+  button.undo-btn.mobile-compact {
+    display: inline-block !important;
+    padding: 5px 12px;
+    font-size: 0.72rem;
+    margin-top: 0;
+  }
 
   .moves-pill {
     font-size: 0.7rem;
@@ -607,12 +627,14 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
     <div class="control-group footer-control">
       <hr class="divider">
       <span class="moves-label">Moves: {{ moveCount }}</span>
+      <button class="undo-btn" @click="undo" :disabled="!canUndo">Undo</button>
       <button class="report-bug" @click="reportBug" :disabled="bugStatus === 'sending'">Report Bug</button>
       <div class="bug-status">{{ bugStatus }}</div>
     </div>
 
     <!-- Mobile: compact inline -->
     <span class="moves-pill mobile-compact" style="display:none">{{ moveCount }} moves</span>
+    <button class="undo-btn mobile-compact" style="display:none" @click="undo" :disabled="!canUndo">Undo</button>
   </div>
 
   <!-- Confirmation modal -->
@@ -685,6 +707,7 @@ createApp({
     // Move tracking
     const moveCount = ref(0);
     const moveLog = [];
+    const undoStack = reactive([]);
     const gameStartedAt = ref(new Date().toISOString());
     const bugStatus = ref('');
 
@@ -754,6 +777,7 @@ createApp({
         won.value = false;
         moveCount.value = 0;
         moveLog.length = 0;
+        undoStack.length = 0;
         gameStartedAt.value = new Date().toISOString();
         initGame();
         saveState();
@@ -844,6 +868,48 @@ createApp({
       }
     }
 
+    // --- Undo ---
+
+    function snapshotGrid() {
+      const R = ROWS.value, C = COLS.value;
+      const flat = [];
+      for (let r = 0; r < R; r++)
+        for (let c = 0; c < C; c++)
+          flat.push(grid[r][c]);
+      return flat;
+    }
+
+    function undo() {
+      if (!undoStack.length) return;
+      const snap = undoStack.pop();
+      const R = ROWS.value, C = COLS.value;
+
+      // Restore grid from snapshot
+      for (let r = 0; r < R; r++)
+        for (let c = 0; c < C; c++) {
+          const tid = snap[r * C + c];
+          grid[r][c] = tid;
+          tilePos.set(tid, { row: r, col: c });
+        }
+
+      // Reset all groups to singletons, then re-merge
+      for (const key of Object.keys(groups)) delete groups[key];
+      nextGroupId = 0;
+      for (const tile of tiles) {
+        const gid = nextGroupId++;
+        groups[gid] = reactive({ id: gid, tileIds: new Set([tile.id]) });
+        tile.groupId = gid;
+      }
+      checkMerges();
+
+      moveCount.value--;
+      moveLog.pop();
+      won.value = false;
+      saveState();
+    }
+
+    const canUndo = computed(() => undoStack.length > 0);
+
     // --- State persistence (for live-reload / HMR) ---
 
     function saveState() {
@@ -858,6 +924,7 @@ createApp({
       const state = {
         rows: R, cols: C, grid: flatGrid, img: imgSrc.value,
         moveCount: moveCount.value, moveLog: moveLog.slice(),
+        undoStack: undoStack.slice(),
         gameStartedAt: gameStartedAt.value,
       };
       try { localStorage.setItem('jigsaw_state', JSON.stringify(state)); } catch(e) {}
@@ -924,6 +991,8 @@ createApp({
         moveCount.value = state.moveCount || 0;
         moveLog.length = 0;
         if (state.moveLog) moveLog.push(...state.moveLog);
+        undoStack.length = 0;
+        if (state.undoStack) undoStack.push(...state.undoStack);
         gameStartedAt.value = state.gameStartedAt || new Date().toISOString();
 
         // Recompute groups from adjacency
@@ -1100,8 +1169,10 @@ createApp({
         return;
       }
 
+      const beforeSnap = snapshotGrid();
       const result = tryMove(dragGroupId, anchorTargetRow, anchorTargetCol);
       if (result) {
+        undoStack.push(beforeSnap);
         moveCount.value++;
         const anchorOriginPos = dragOriginPositions.get(dragAnchorId);
         moveLog.push({
@@ -1551,7 +1622,7 @@ createApp({
       tiles, tileW, tileH, won, scale, boardStyle,
       COLS, ROWS, sliderCols, breakGroupsOption,
       dropHighlights, dropValid, draggingTileIds,
-      moveCount, bugStatus,
+      moveCount, canUndo, undo, bugStatus,
       menuOpen, pendingAction,
       tileStyle, tileClasses, newGame, reportBug,
       confirmNewGame, pickDifficulty, confirmYes,
