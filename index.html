@@ -125,6 +125,8 @@ button.new-game {
   letter-spacing: 0.03em;
 }
 button.new-game:hover { background: #6a5bd4; }
+button.new-game.restart { background: #4a4a5a; }
+button.new-game.restart:hover { background: #5a5a6a; }
 button.report-bug {
   padding: 8px 16px;
   background: #e74c3c;
@@ -214,7 +216,8 @@ button.report-bug:disabled { opacity: 0.4; cursor: default; }
         <input type="checkbox" v-model="breakGroupsOption"> Break groups on drop
       </label>
     </div>
-    <button class="new-game" @click="newGame">New Game</button>
+    <button class="new-game" @click="newGame(false)">New Game</button>
+    <button class="new-game restart" @click="newGame(true)">Restart</button>
     <div class="control-group" style="margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
       <label>Moves: {{ moveCount }}</label>
       <button class="report-bug" @click="reportBug" :disabled="bugStatus === 'sending'">Report Bug</button>
@@ -296,7 +299,8 @@ createApp({
     function newGame(keepImage) {
       localStorage.removeItem('jigsaw_state');
       if (!keepImage) {
-        imgSrc.value = IMAGES[Math.floor(Math.random() * IMAGES.length)];
+        const others = IMAGES.filter(i => i !== imgSrc.value);
+        imgSrc.value = others[Math.floor(Math.random() * others.length)];
       }
       const img = new Image();
       img.onload = () => {
