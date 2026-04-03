@@ -13,9 +13,7 @@ FROM node:alpine
 
 WORKDIR /app
 COPY --from=builder /app/index.html /app/
-COPY --from=builder /app/card1.png /app/
-COPY --from=builder /app/card2.png /app/
-COPY --from=builder /app/card3.png /app/
+COPY --from=builder /app/card*.png /app/
 COPY --from=builder /app/server.js /app/
 
 ENV PORT=80
