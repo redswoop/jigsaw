@@ -69,10 +69,25 @@ const server = http.createServer(async (req, res) => {
         });
         if (images.length === 0) continue;
         const videos = files.filter(f => /\.mp4$/i.test(f));
+        // Read optional names.json for image display names
+        let names = {};
+        const namesFile = path.join(packDir, 'names.json');
+        if (fs.existsSync(namesFile)) {
+          try {
+            const raw = JSON.parse(fs.readFileSync(namesFile, 'utf8'));
+            // Map filename keys to full image paths
+            for (const [key, val] of Object.entries(raw)) {
+              names[`images/${entry.name}/${key}`] = val;
+            }
+          } catch (e) {
+            console.warn(`[packs] bad names.json in ${entry.name}:`, e.message);
+          }
+        }
         packs.push({
           name: entry.name,
           label: entry.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
           images: images.map(f => `images/${entry.name}/${f}`),
+          names,
           videos: Object.fromEntries(
             images.map(img => {
               const base = img.replace(/\.[^.]+$/, '');

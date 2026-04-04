@@ -18,11 +18,20 @@ export function createGameEngine() {
   const breakGroupsOption = ref(true);
   const scale = ref(1);
 
-  const boardStyle = computed(() => ({
-    width: imgW.value + 'px',
-    height: imgH.value + 'px',
-    transform: `scale(${scale.value})`,
-  }));
+  const boardStyle = computed(() => {
+    const s = scale.value;
+    const w = imgW.value;
+    const h = imgH.value;
+    return {
+      width: w + 'px',
+      height: h + 'px',
+      transform: `scale(${s})`,
+      // Negative margins shrink the layout box to match the visual (scaled) size,
+      // preventing flex centering from clipping oversized content.
+      marginRight: -(w * (1 - s)) + 'px',
+      marginBottom: -(h * (1 - s)) + 'px',
+    };
+  });
 
   // Core state
   let nextGroupId = 0;
@@ -51,20 +60,18 @@ export function createGameEngine() {
 
   function computeScale() {
     if (!naturalW.value || !naturalH.value) return;
-    const W = window.innerWidth;
-    const H = window.innerHeight;
-    const isMobile = W <= 768 || (H <= 500 && W > H);
-    const isLandscapeMobile = H <= 500 && W > H;
-
-    const toolbarH = 54;
-    let availW, availH;
-    if (isMobile) {
-      availW = W - 16;
-      availH = H - toolbarH - 16;
-    } else {
-      availW = W - 64;
-      availH = H - toolbarH - 48;
-    }
+    const wrap = document.getElementById('board-wrap');
+    if (!wrap) return;
+    const style = getComputedStyle(wrap);
+    const padTop = parseFloat(style.paddingTop) || 0;
+    const padBottom = parseFloat(style.paddingBottom) || 0;
+    const padLeft = parseFloat(style.paddingLeft) || 0;
+    const padRight = parseFloat(style.paddingRight) || 0;
+    const wrapRect = wrap.getBoundingClientRect();
+    const caption = wrap.querySelector('.board-caption');
+    const captionH = caption ? caption.offsetHeight : 0;
+    const availW = wrapRect.width - padLeft - padRight;
+    const availH = wrapRect.height - padTop - padBottom - captionH;
     const sx = availW / naturalW.value;
     const sy = availH / naturalH.value;
     scale.value = Math.min(sx, sy, 1);

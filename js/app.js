@@ -70,6 +70,12 @@ createApp({
     // --- Game engine ---
     const game = createGameEngine();
 
+    // Current image display name
+    const imageName = computed(() => {
+      if (!currentPack.value) return '';
+      return currentPack.value.names?.[game.imgSrc.value] || '';
+    });
+
     // Victory video lookup
     const victoryVideo = computed(() => {
       if (!currentPack.value) return null;
@@ -292,7 +298,7 @@ createApp({
       soundOn, toggleSound,
 
       // Victory
-      victoryVideo,
+      victoryVideo, imageName,
 
       // Game engine
       tiles: game.tiles,

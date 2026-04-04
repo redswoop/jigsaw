@@ -141,6 +141,7 @@
 
     <!-- Board -->
     <div id="board-wrap">
+      <div v-if="imageName" class="board-caption">{{ imageName }}</div>
       <div id="board"
         :style="boardStyle"
         @pointerdown.prevent="onPointerDown"
