@@ -23,6 +23,7 @@ const MIME = {
   '.json': 'application/json',
   '.ico': 'image/x-icon',
   '.mp4': 'video/mp4',
+  '.webp': 'image/webp',
 };
 
 function sendJson(res, status, data) {

@@ -1661,6 +1661,7 @@ createApp({
     // --- Init & resize ---
 
     function onResize() { computeScale(); }
+    function preventGesture(e) { e.preventDefault(); }
 
     onMounted(async () => {
       await loadPacks();
@@ -1707,11 +1708,12 @@ createApp({
       img.src = savedImg;
       window.addEventListener('resize', onResize);
       // Prevent pinch-zoom on iOS Safari
-      document.addEventListener('gesturestart', function(e) { e.preventDefault(); });
+      document.addEventListener('gesturestart', preventGesture);
     });
 
     onUnmounted(() => {
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('gesturestart', preventGesture);
     });
 
     // --- Bug Reporting ---

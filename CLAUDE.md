@@ -8,9 +8,9 @@ Single-file web app (`index.html`) with Vite for dev and a Node server for the b
 
 ```bash
 bun install                    # first time only
-bun run dev                    # Vite (HMR) on :8080 + API server on :3001
+bun run dev                    # Vite (HMR) on :5173 + API server on :3002
 ```
-Then open http://localhost:8080. Vite proxies `/api` to the API server. Puzzle state persists via localStorage.
+Then open http://localhost:5173. Vite proxies `/api` to the API server. Puzzle state persists via localStorage.
 
 **Production:** `bun run start` (or `node server.js`) serves everything on one port.
 
