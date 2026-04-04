@@ -163,13 +163,16 @@ const server = http.createServer(async (req, res) => {
     if (!stat.isFile()) throw new Error('not a file');
     const ext = path.extname(fullPath);
     const mime = MIME[ext] || 'application/octet-stream';
-    const data = fs.readFileSync(fullPath);
-    const headers = { 'Content-Type': mime };
+    const fileSize = stat.size;
+    const headers = {
+      'Content-Type': mime,
+      'Accept-Ranges': 'bytes',
+    };
     if (ext === '.html') {
       headers['Cache-Control'] = 'no-cache';
     } else {
       headers['Cache-Control'] = 'public, max-age=86400';
-      headers['ETag'] = `"${stat.size}-${stat.mtimeMs}"`;
+      headers['ETag'] = `"${fileSize}-${stat.mtimeMs}"`;
     }
     // ETag support: return 304 if client has current version
     const ifNoneMatch = req.headers['if-none-match'];
@@ -178,8 +181,23 @@ const server = http.createServer(async (req, res) => {
       res.end();
       return;
     }
+    // Range request support (required for iOS video playback)
+    const range = req.headers.range;
+    if (range) {
+      const match = range.match(/bytes=(\d+)-(\d*)/);
+      if (match) {
+        const start = parseInt(match[1], 10);
+        const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+        headers['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
+        headers['Content-Length'] = end - start + 1;
+        res.writeHead(206, headers);
+        fs.createReadStream(fullPath, { start, end }).pipe(res);
+        return;
+      }
+    }
+    headers['Content-Length'] = fileSize;
     res.writeHead(200, headers);
-    res.end(data);
+    fs.createReadStream(fullPath).pipe(res);
   } catch {
     res.writeHead(404);
     res.end('Not found');
