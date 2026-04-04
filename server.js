@@ -71,7 +71,7 @@ const server = http.createServer(async (req, res) => {
         const videos = files.filter(f => /\.mp4$/i.test(f));
         packs.push({
           name: entry.name,
-          label: entry.name.charAt(0).toUpperCase() + entry.name.slice(1),
+          label: entry.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
           images: images.map(f => `images/${entry.name}/${f}`),
           videos: Object.fromEntries(
             images.map(img => {
@@ -85,6 +85,7 @@ const server = http.createServer(async (req, res) => {
       packs.sort((a, b) => a.name.localeCompare(b.name));
       sendJson(res, 200, packs);
     } catch (e) {
+      console.error('GET /api/packs error:', e);
       sendJson(res, 500, { error: e.message });
     }
     return;

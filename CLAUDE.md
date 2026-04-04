@@ -21,7 +21,21 @@ dump()   // prints grid ASCII, overlaps, group info, integrity checks
 
 ## Architecture
 
-Everything lives in `index.html` (~900 lines): HTML template, CSS, and JS in one file. Vue 3 is loaded via CDN (`unpkg.com/vue@3`). No components — it's a single `setup()` function using the Composition API.
+Multi-screen Vue 3 app (CDN, Composition API) split across four files:
+
+```
+index.html       — Vue template: screen layouts (home, picker, setup, puzzle)
+css/style.css    — All styles
+js/app.js        — Vue app shell, screen routing, pack loading
+js/game.js       — Puzzle engine (createGameEngine(): tiles, groups, grid, moves, drag)
+js/sounds.js     — Web Audio sound effects
+```
+
+Uses `<script type="module">` for ES imports. No build step — works with both Vite dev and static serving.
+
+### Screen Flow
+
+`currentScreen` ref drives navigation: **home** (pack gallery) → **picker** (image grid) → **setup** (difficulty) → **puzzle** (gameplay). Saved games in localStorage skip straight to puzzle on load. URL params (`?puzzle=N&cols=C&pack=name`) also skip to puzzle.
 
 ### Data Model
 
@@ -48,7 +62,7 @@ Tiles are absolutely-positioned divs with `background-image` + `background-posit
 
 ### State Persistence
 
-`saveState()` writes `{rows, cols, grid, img, moveCount, moveLog}` to localStorage after every move. On load, `restoreState()` rebuilds tiles from the saved grid and runs `checkMerges()` to reconstruct groups — so code changes to merge/group logic take effect on reload.
+`saveState()` writes `{rows, cols, grid, img, moveCount, moveLog}` to localStorage after every move. On load, `restoreState()` rebuilds tiles from the saved grid and runs `checkMerges()` to reconstruct groups — so code changes to merge/group logic take effect on reload. If a saved game exists, `app.js` navigates directly to the puzzle screen on startup.
 
 ### Bug Reporting
 
@@ -66,4 +80,4 @@ JIGSAW_URL=http://host:1997 ./jigsaw-bugs   # point at remote server
 
 ## Images
 
-Puzzle images live in `images/<pack>/` subdirectories (e.g. `images/pokemon/`). The server auto-discovers packs via `GET /api/packs`. A random image from the current pack is picked on "New Game". To add a new pack, create a folder under `images/` with `.png`/`.jpg`/`.webp` files (and optional matching `.mp4` for victory videos). Source originals for the Pokemon pack are in `~/src/decklistgen/cache/` (the `*_fullart.png` files).
+Puzzle images live in `images/<pack>/` subdirectories (e.g. `images/pokemon/`). The server auto-discovers packs via `GET /api/packs`. The home screen shows all packs as cards; users pick a pack, then an image, then difficulty. To add a new pack, create a folder under `images/` with `.png`/`.jpg`/`.webp` files (and optional matching `.mp4` for victory videos). Source originals for the Pokemon pack are in `~/src/decklistgen/cache/` (the `*_fullart.png` files).
