@@ -610,8 +610,9 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
       ></div>
 
       <div v-if="won" id="victory-overlay">
-        <video v-if="victoryVideo" :src="victoryVideo" autoplay loop muted playsinline
-          webkit-playsinline preload="auto" id="victory-video" ref="victoryVideoEl"></video>
+        <video v-if="victoryVideo" :src="victoryVideo" autoplay loop playsinline
+          webkit-playsinline preload="auto" id="victory-video" ref="victoryVideoEl"
+          @loadeddata="$event.target.muted = true; $event.target.play().catch(() => {})"></video>
         <h2>Solved!</h2>
       </div>
     </div>
@@ -1599,7 +1600,12 @@ createApp({
       if (allCorrect && tiles.length > 0) {
         won.value = true;
         nextTick(() => {
-          if (victoryVideoEl.value) victoryVideoEl.value.play().catch(() => {});
+          const v = victoryVideoEl.value;
+          if (v) {
+            v.muted = true;
+            v.playsInline = true;
+            v.play().catch(() => {});
+          }
         });
       }
     }
