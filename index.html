@@ -147,6 +147,16 @@ body::before {
   font-weight: 500;
 }
 
+.control-group select {
+  background: #1a1712;
+  color: #d4c5a8;
+  border: 1px solid #3a3226;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
 /* Custom range slider */
 .control-group input[type="range"] {
   -webkit-appearance: none;
@@ -505,6 +515,7 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
   .control-group.pieces-control { display: none; }
   .control-group.break-control { display: none; }
   .control-group.footer-control { display: none; }
+  .control-group.pack-control { display: none; }
   button.new-game.desktop-only { display: none; }
   button.new-game.restart { display: none; }
 
@@ -632,6 +643,13 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
       <button @click="pickDifficulty(4)">Easy <span style="opacity:0.4; font-size:0.75rem; margin-left:4px">20 pieces</span></button>
       <button @click="pickDifficulty(6)">Medium <span style="opacity:0.4; font-size:0.75rem; margin-left:4px">48 pieces</span></button>
       <button @click="pickDifficulty(8)">Hard <span style="opacity:0.4; font-size:0.75rem; margin-left:4px">88 pieces</span></button>
+      <hr class="menu-divider" v-if="packs.length > 0">
+      <div class="menu-label" v-if="packs.length > 0">Image Pack</div>
+      <button v-for="pack in packs" :key="pack.name" v-if="packs.length > 0"
+        @click="switchPack(pack.name)"
+        :style="{ fontWeight: currentPack && currentPack.name === pack.name ? 'bold' : 'normal' }">
+        {{ pack.label }} <span style="opacity:0.4; font-size:0.75rem; margin-left:4px">{{ pack.images.length }} images</span>
+      </button>
       <hr class="menu-divider">
       <button @click="menuOpen = false; reportBug()">Report Bug</button>
     </div>
@@ -646,6 +664,12 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
       <label class="checkbox-label">
         <input type="checkbox" v-model="breakGroupsOption"> Break groups on drop
       </label>
+    </div>
+    <div class="control-group pack-control desktop-only" v-if="packs.length > 0">
+      <label>Image Pack</label>
+      <select @change="switchPack($event.target.value)" :value="currentPack && currentPack.name">
+        <option v-for="pack in packs" :key="pack.name" :value="pack.name">{{ pack.label }} ({{ pack.images.length }})</option>
+      </select>
     </div>
     <button class="new-game desktop-only" @click="confirmNewGame(false)">New Game</button>
     <button class="new-game restart" @click="confirmNewGame(true)">Restart</button>
@@ -698,37 +722,47 @@ const { createApp, reactive, ref, computed, onMounted, onUnmounted, watch, nextT
 
 createApp({
   setup() {
-    const IMAGES = [
-      'card1.png', 'card2.png', 'card3.png', 'card4.png', 'card5.png',
-      'card6.png', 'card7.png', 'card8.png', 'card9.png', 'card10.png',
-      'card11.png', 'card12.png', 'card13.png', 'card14.png', 'card15.png',
-      'card16.png', 'card17.png', 'card18.png', 'card19.png', 'card20.png',
-      'card21.png', 'card22.png', 'card23.png',
-    ];
-    const VIDEOS = Object.fromEntries(
-      IMAGES.map(img => [img, img.replace('.png', '.mp4')])
-    );
-    // ?puzzle=5&cols=4 selects card5.png at 4 columns
+    // Image packs — loaded from /api/packs
+    const packs = ref([]);
+    const currentPack = ref(null);
+    const IMAGES = computed(() => currentPack.value ? currentPack.value.images : []);
+    const VIDEOS = computed(() => currentPack.value ? currentPack.value.videos : {});
+
+    async function loadPacks() {
+      try {
+        const res = await fetch('/api/packs');
+        packs.value = await res.json();
+      } catch (e) {
+        console.warn('Failed to load packs:', e);
+        packs.value = [];
+      }
+    }
+
+    function selectPack(packName) {
+      const pack = packs.value.find(p => p.name === packName);
+      if (pack) {
+        currentPack.value = pack;
+        localStorage.setItem('jigsaw_pack', packName);
+      }
+    }
+
+    // ?puzzle=5&cols=4 selects image 5 at 4 columns
     const urlParams = new URLSearchParams(window.location.search);
     const urlPuzzle = urlParams.get('puzzle');
     const urlCols = urlParams.get('cols');
-    let initialImg = IMAGES[0];
     let initialCols = null;
-    if (urlPuzzle && /^\d+$/.test(urlPuzzle)) {
-      const idx = parseInt(urlPuzzle, 10) - 1;
-      if (idx >= 0 && idx < IMAGES.length) initialImg = IMAGES[idx];
-    }
     if (urlCols && /^\d+$/.test(urlCols)) {
       const c = parseInt(urlCols, 10);
       if (c >= 2 && c <= 16) initialCols = c;
     }
-    const imgSrc = ref(initialImg);
+    const imgSrc = ref('');
 
     function updatePuzzleParam() {
-      const num = IMAGES.indexOf(imgSrc.value) + 1;
+      const num = IMAGES.value.indexOf(imgSrc.value) + 1;
       const url = new URL(window.location);
       url.searchParams.set('puzzle', num);
       url.searchParams.set('cols', sliderCols.value);
+      if (currentPack.value) url.searchParams.set('pack', currentPack.value.name);
       history.replaceState(null, '', url);
     }
 
@@ -819,7 +853,7 @@ createApp({
     const tileW = computed(() => imgW.value / COLS.value);
     const tileH = computed(() => imgH.value / ROWS.value);
     const won = ref(false);
-    const victoryVideo = computed(() => VIDEOS[imgSrc.value] || null);
+    const victoryVideo = computed(() => VIDEOS.value[imgSrc.value] || null);
     const breakGroupsOption = ref(true);
     const scale = ref(1);
 
@@ -896,8 +930,17 @@ createApp({
     function newGame(keepImage) {
       localStorage.removeItem('jigsaw_state');
       if (!keepImage) {
-        const others = IMAGES.filter(i => i !== imgSrc.value);
-        imgSrc.value = others[Math.floor(Math.random() * others.length)];
+        // Avoid recently seen images to prevent repeats
+        const history = JSON.parse(localStorage.getItem('jigsaw_history') || '[]');
+        const avoid = new Set(history);
+        let pool = IMAGES.value.filter(i => i !== imgSrc.value && !avoid.has(i));
+        if (pool.length === 0) pool = IMAGES.value.filter(i => i !== imgSrc.value);
+        imgSrc.value = pool[Math.floor(Math.random() * pool.length)];
+        history.push(imgSrc.value);
+        // Keep history at half the pack size so every image gets a turn
+        const maxHistory = Math.max(1, Math.floor(IMAGES.value.length / 2));
+        while (history.length > maxHistory) history.shift();
+        localStorage.setItem('jigsaw_history', JSON.stringify(history));
       }
       const img = new Image();
       img.onload = () => {
@@ -937,6 +980,20 @@ createApp({
         pendingAction.value = () => newGame(keepImage);
       } else {
         newGame(keepImage);
+      }
+    }
+
+    function switchPack(packName) {
+      menuOpen.value = false;
+      if (currentPack.value && currentPack.value.name === packName) return;
+      const doSwitch = () => {
+        selectPack(packName);
+        newGame(false);
+      };
+      if (moveCount.value > 0 && !won.value) {
+        pendingAction.value = doSwitch;
+      } else {
+        doSwitch();
       }
     }
 
@@ -1605,9 +1662,17 @@ createApp({
 
     function onResize() { computeScale(); }
 
-    onMounted(() => {
+    onMounted(async () => {
+      await loadPacks();
+
+      // Determine which pack to use
+      const urlPack = urlParams.get('pack');
+      const savedPack = localStorage.getItem('jigsaw_pack');
+      const packName = urlPack || savedPack || (packs.value[0] && packs.value[0].name);
+      if (packName) selectPack(packName);
+
       // Check if there's saved state to determine which image to load
-      let savedImg = imgSrc.value;
+      let savedImg = '';
       try {
         const raw = localStorage.getItem('jigsaw_state');
         if (raw) {
@@ -1615,6 +1680,19 @@ createApp({
           if (state && state.img) savedImg = state.img;
         }
       } catch(e) {}
+
+      // If saved image belongs to a different pack, switch to that pack
+      if (savedImg) {
+        const ownerPack = packs.value.find(p => p.images.includes(savedImg));
+        if (ownerPack) selectPack(ownerPack.name);
+      }
+
+      // If no saved image or it's invalid, pick from current pack
+      if (!savedImg || !IMAGES.value.includes(savedImg)) {
+        const idx = urlPuzzle && /^\d+$/.test(urlPuzzle) ? parseInt(urlPuzzle, 10) - 1 : 0;
+        savedImg = IMAGES.value[idx] || IMAGES.value[0];
+      }
+      imgSrc.value = savedImg;
 
       const img = new Image();
       img.onload = () => {
@@ -1760,6 +1838,7 @@ createApp({
       moveCount, canUndo, undo, bugStatus, soundOn, toggleSound,
       menuOpen, pendingAction,
       tileStyle, tileClasses, newGame, reportBug,
+      packs, currentPack, switchPack,
       confirmNewGame, pickDifficulty, confirmYes,
       onPointerDown, onPointerMove, onPointerUp,
     };

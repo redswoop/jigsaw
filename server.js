@@ -9,6 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT ?? '3002', 10);
 const BUGS_DIR = process.env.BUGS_DIR || path.join(__dirname, '.bugs');
 const STATIC_DIR = __dirname;
+const IMAGES_DIR = path.join(__dirname, 'images');
 
 // Ensure bugs directory exists
 fs.mkdirSync(BUGS_DIR, { recursive: true });
@@ -50,6 +51,43 @@ const server = http.createServer(async (req, res) => {
   const pathname = url.pathname;
 
   // --- API routes ---
+
+  // GET /api/packs — list available image packs
+  if (req.method === 'GET' && pathname === '/api/packs') {
+    try {
+      const entries = fs.readdirSync(IMAGES_DIR, { withFileTypes: true });
+      const packs = [];
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const packDir = path.join(IMAGES_DIR, entry.name);
+        const files = fs.readdirSync(packDir);
+        const images = files.filter(f => /\.(png|jpe?g|webp)$/i.test(f)).sort((a, b) => {
+          const na = parseInt(a.match(/\d+/)?.[0] || '0', 10);
+          const nb = parseInt(b.match(/\d+/)?.[0] || '0', 10);
+          return na - nb;
+        });
+        if (images.length === 0) continue;
+        const videos = files.filter(f => /\.mp4$/i.test(f));
+        packs.push({
+          name: entry.name,
+          label: entry.name.charAt(0).toUpperCase() + entry.name.slice(1),
+          images: images.map(f => `images/${entry.name}/${f}`),
+          videos: Object.fromEntries(
+            images.map(img => {
+              const base = img.replace(/\.[^.]+$/, '');
+              const vid = videos.find(v => v.replace(/\.[^.]+$/, '') === base);
+              return [`images/${entry.name}/${img}`, vid ? `images/${entry.name}/${vid}` : null];
+            }).filter(([, v]) => v)
+          ),
+        });
+      }
+      packs.sort((a, b) => a.name.localeCompare(b.name));
+      sendJson(res, 200, packs);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return;
+  }
 
   // POST /api/bugs — submit a bug report
   if (req.method === 'POST' && pathname === '/api/bugs') {

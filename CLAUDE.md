@@ -66,4 +66,4 @@ JIGSAW_URL=http://host:1997 ./jigsaw-bugs   # point at remote server
 
 ## Images
 
-Puzzle images are `card1.png`, `card2.png`, `card3.png` in the project root (fullart Pokemon cards). A random one is picked on "New Game". Source originals are in `~/src/decklistgen/cache/` (the `*_fullart.png` files).
+Puzzle images live in `images/<pack>/` subdirectories (e.g. `images/pokemon/`). The server auto-discovers packs via `GET /api/packs`. A random image from the current pack is picked on "New Game". To add a new pack, create a folder under `images/` with `.png`/`.jpg`/`.webp` files (and optional matching `.mp4` for victory videos). Source originals for the Pokemon pack are in `~/src/decklistgen/cache/` (the `*_fullart.png` files).
