@@ -2,12 +2,15 @@
 import { createGameEngine } from './game.js';
 import { soundOn, toggleSound } from './sounds.js';
 
-const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
+const { createApp, ref, computed, onMounted, onUnmounted, nextTick, watch } = Vue;
 
 createApp({
   setup() {
     // --- Screen state ---
     const currentScreen = ref('home');  // 'home' | 'picker' | 'setup' | 'puzzle'
+
+    // Scroll to top on screen change
+    watch(currentScreen, () => window.scrollTo(0, 0));
 
     // --- Pack state ---
     const packs = ref([]);

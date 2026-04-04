@@ -1,8 +1,8 @@
 /* ---- Base ---- */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { height: 100%; }
-html { height: -webkit-fill-available; touch-action: manipulation; }
+html { min-height: 100%; min-height: -webkit-fill-available; touch-action: manipulation; }
+body { min-height: 100%; }
 body {
   background: #2c2418;
   background-image:
