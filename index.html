@@ -610,8 +610,8 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
       ></div>
 
       <div v-if="won" id="victory-overlay">
-        <video v-if="victoryVideo" :src="victoryVideo" autoplay loop playsinline
-          webkit-playsinline preload="auto" id="victory-video" ref="victoryVideoEl"
+        <video v-if="victoryVideo" :src="victoryVideo" autoplay loop muted playsinline
+          preload="auto" id="victory-video"
           @loadeddata="$event.target.muted = true; $event.target.play().catch(() => {})"></video>
         <h2>Solved!</h2>
       </div>
@@ -1591,8 +1591,6 @@ createApp({
       playThump();
     }
 
-    const victoryVideoEl = ref(null);
-
     function checkWin() {
       const allCorrect = tiles.every(t => {
         const pos = tilePos.get(t.id);
@@ -1600,14 +1598,6 @@ createApp({
       });
       if (allCorrect && tiles.length > 0) {
         won.value = true;
-        nextTick(() => {
-          const v = victoryVideoEl.value;
-          if (v) {
-            v.muted = true;
-            v.playsInline = true;
-            v.play().catch(() => {});
-          }
-        });
       }
     }
 
@@ -1764,7 +1754,7 @@ createApp({
     };
 
     return {
-      tiles, tileW, tileH, won, victoryVideo, victoryVideoEl, scale, boardStyle,
+      tiles, tileW, tileH, won, victoryVideo, scale, boardStyle,
       COLS, ROWS, sliderCols, breakGroupsOption,
       dropHighlights, dropValid, draggingTileIds,
       moveCount, canUndo, undo, bugStatus, soundOn, toggleSound,
