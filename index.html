@@ -289,7 +289,7 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
   z-index: 200;
   border-radius: 6px;
   animation: victoryIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: none;
+  pointer-events: auto;
 }
 #victory-overlay h2 {
   font-family: 'Crimson Pro', Georgia, serif;
@@ -611,7 +611,7 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
 
       <div v-if="won" id="victory-overlay">
         <video v-if="victoryVideo" :src="victoryVideo" autoplay loop muted playsinline
-          id="victory-video" ref="victoryVideoEl"></video>
+          webkit-playsinline preload="auto" id="victory-video" ref="victoryVideoEl"></video>
         <h2>Solved!</h2>
       </div>
     </div>
