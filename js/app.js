@@ -12,6 +12,55 @@ createApp({
     // Scroll to top on screen change
     watch(currentScreen, () => window.scrollTo(0, 0));
 
+    // --- History / back button support ---
+    let suppressPopState = false;
+
+    function navigateTo(screen) {
+      currentScreen.value = screen;
+      history.pushState({ screen }, '', '');
+    }
+
+    function handlePopState(e) {
+      if (suppressPopState) { suppressPopState = false; return; }
+      const target = e.state && e.state.screen;
+      if (target) {
+        // If leaving puzzle with in-progress game, confirm first
+        if (currentScreen.value === 'puzzle' && game.moveCount.value > 0 && !game.won.value) {
+          // Push state back so the URL doesn't change yet
+          suppressPopState = true;
+          history.pushState({ screen: 'puzzle' }, '', '');
+          pendingAction.value = () => {
+            localStorage.removeItem('jigsaw_state');
+            currentScreen.value = target;
+            clearUrlParams();
+          };
+          return;
+        }
+        if (currentScreen.value === 'puzzle') {
+          localStorage.removeItem('jigsaw_state');
+          clearUrlParams();
+        }
+        currentScreen.value = target;
+      } else {
+        // No state — go home
+        if (currentScreen.value === 'puzzle' && game.moveCount.value > 0 && !game.won.value) {
+          suppressPopState = true;
+          history.pushState({ screen: 'puzzle' }, '', '');
+          pendingAction.value = () => {
+            localStorage.removeItem('jigsaw_state');
+            currentScreen.value = 'home';
+            clearUrlParams();
+          };
+          return;
+        }
+        if (currentScreen.value === 'puzzle') {
+          localStorage.removeItem('jigsaw_state');
+          clearUrlParams();
+        }
+        currentScreen.value = 'home';
+      }
+    }
+
     // --- Pack state ---
     const packs = ref([]);
     const currentPack = ref(null);
@@ -47,7 +96,6 @@ createApp({
     }
 
     // --- Pack card preview images ---
-    // Show a few preview thumbnails per pack card
     function packPreviewImages(pack) {
       return pack.images.slice(0, 4);
     }
@@ -56,29 +104,28 @@ createApp({
     function clearUrlParams() {
       const url = new URL(window.location);
       url.search = '';
-      history.replaceState(null, '', url);
+      history.replaceState(history.state, '', url);
     }
 
     function goHome() {
-      currentScreen.value = 'home';
+      navigateTo('home');
       clearUrlParams();
     }
 
     function selectPackAndGo(pack) {
       selectPack(pack.name);
-      currentScreen.value = 'picker';
+      navigateTo('picker');
     }
 
     function selectImageAndGo(img) {
       selectedImage.value = img;
-      // Preload image dimensions for piece count computation
       selectedImageDims.value = null;
       const imgEl = new Image();
       imgEl.onload = () => {
         selectedImageDims.value = { w: imgEl.naturalWidth, h: imgEl.naturalHeight };
       };
       imgEl.src = img;
-      currentScreen.value = 'setup';
+      navigateTo('setup');
     }
 
     // Compute piece count for a given column count using image dimensions
@@ -91,7 +138,7 @@ createApp({
 
     async function startPuzzle(cols) {
       await game.startGame(selectedImage.value, cols);
-      currentScreen.value = 'puzzle';
+      navigateTo('puzzle');
       updatePuzzleParam();
       nextTick(game.computeScale);
     }
@@ -115,11 +162,11 @@ createApp({
       if (game.moveCount.value > 0 && !game.won.value) {
         pendingAction.value = () => {
           localStorage.removeItem('jigsaw_state');
-          currentScreen.value = 'picker';
+          navigateTo('picker');
         };
       } else {
         localStorage.removeItem('jigsaw_state');
-        currentScreen.value = 'picker';
+        navigateTo('picker');
       }
     }
 
@@ -131,6 +178,9 @@ createApp({
 
     // --- Mobile menu ---
     const menuOpen = ref(false);
+
+    // --- Settings panel (desktop) ---
+    const settingsOpen = ref(false);
 
     // --- Resize handler ---
     function onResize() { game.computeScale(); }
@@ -146,11 +196,14 @@ createApp({
       url.searchParams.set('puzzle', num);
       url.searchParams.set('cols', game.sliderCols.value);
       if (currentPack.value) url.searchParams.set('pack', currentPack.value.name);
-      history.replaceState(null, '', url);
+      history.replaceState(history.state, '', url);
     }
 
     // --- Init ---
     onMounted(async () => {
+      // Set initial history state
+      history.replaceState({ screen: 'home' }, '', '');
+
       await loadPacks();
 
       // Determine which pack to use
@@ -182,15 +235,14 @@ createApp({
       const images = currentPack.value ? currentPack.value.images : [];
 
       if (savedImg && images.includes(savedImg)) {
-        // Restore saved game
         await game.loadImageDimensions(savedImg);
         if (game.restoreState()) {
           currentScreen.value = 'puzzle';
+          history.replaceState({ screen: 'puzzle' }, '', '');
           updatePuzzleParam();
           nextTick(game.computeScale);
         }
       } else if (urlPuzzle && urlCols) {
-        // URL params: skip to puzzle
         const idx = /^\d+$/.test(urlPuzzle) ? parseInt(urlPuzzle, 10) - 1 : 0;
         const cols = /^\d+$/.test(urlCols) ? parseInt(urlCols, 10) : 8;
         const img = images[idx] || images[0];
@@ -198,18 +250,20 @@ createApp({
           selectedImage.value = img;
           await game.startGame(img, Math.min(Math.max(cols, 2), 16));
           currentScreen.value = 'puzzle';
+          history.replaceState({ screen: 'puzzle' }, '', '');
           updatePuzzleParam();
           nextTick(game.computeScale);
         }
       }
-      // Otherwise stay on 'home' screen
 
       window.addEventListener('resize', onResize);
+      window.addEventListener('popstate', handlePopState);
       document.addEventListener('gesturestart', preventGesture);
     });
 
     onUnmounted(() => {
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('popstate', handlePopState);
       document.removeEventListener('gesturestart', preventGesture);
     });
 
@@ -223,7 +277,7 @@ createApp({
 
       // Navigation
       goHome, selectPackAndGo, selectImageAndGo, startPuzzle,
-      confirmGoHome, confirmNewPuzzle,
+      confirmGoHome, confirmNewPuzzle, navigateTo,
 
       // Confirmation modal
       pendingAction, confirmYes,
@@ -231,13 +285,16 @@ createApp({
       // Mobile
       menuOpen,
 
+      // Settings
+      settingsOpen,
+
       // Sound
       soundOn, toggleSound,
 
       // Victory
       victoryVideo,
 
-      // Game engine (spread all state + methods for template)
+      // Game engine
       tiles: game.tiles,
       tileW: game.tileW,
       tileH: game.tileH,

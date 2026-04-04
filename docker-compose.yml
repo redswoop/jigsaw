@@ -6,6 +6,7 @@ services:
       - "1997:80"
     volumes:
       - bugs:/data/bugs
+      - ./images:/app/images
     restart: unless-stopped
 
   watchtower:

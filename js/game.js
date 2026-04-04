@@ -56,18 +56,14 @@ export function createGameEngine() {
     const isMobile = W <= 768 || (H <= 500 && W > H);
     const isLandscapeMobile = H <= 500 && W > H;
 
+    const toolbarH = 54;
     let availW, availH;
-    if (isMobile && !isLandscapeMobile) {
+    if (isMobile) {
       availW = W - 16;
-      availH = H - 56;
-    } else if (isLandscapeMobile) {
-      availW = W - 140;
-      availH = H - 16;
+      availH = H - toolbarH - 16;
     } else {
-      const sidebarWidth = 280;
-      const padding = 80;
-      availW = W - sidebarWidth - padding;
-      availH = H - padding;
+      availW = W - 64;
+      availH = H - toolbarH - 48;
     }
     const sx = availW / naturalW.value;
     const sy = availH / naturalH.value;
