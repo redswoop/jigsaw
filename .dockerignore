@@ -1,0 +1,9 @@
+node_modules/
+.bugs/
+.git/
+.github/
+bun.lock
+CLAUDE.md
+Dockerfile*
+docker-compose.yml
+jigsaw-bugs
