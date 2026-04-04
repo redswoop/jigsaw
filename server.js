@@ -208,8 +208,9 @@ const server = http.createServer(async (req, res) => {
       'Content-Type': mime,
       'Accept-Ranges': 'bytes',
     };
-    if (ext === '.html') {
+    if (ext === '.html' || ext === '.js' || ext === '.css') {
       headers['Cache-Control'] = 'no-cache';
+      headers['ETag'] = `"${fileSize}-${stat.mtimeMs}"`;
     } else {
       headers['Cache-Control'] = 'public, max-age=86400';
       headers['ETag'] = `"${fileSize}-${stat.mtimeMs}"`;
