@@ -164,7 +164,21 @@ const server = http.createServer(async (req, res) => {
     const ext = path.extname(fullPath);
     const mime = MIME[ext] || 'application/octet-stream';
     const data = fs.readFileSync(fullPath);
-    res.writeHead(200, { 'Content-Type': mime });
+    const headers = { 'Content-Type': mime };
+    if (ext === '.html') {
+      headers['Cache-Control'] = 'no-cache';
+    } else {
+      headers['Cache-Control'] = 'public, max-age=86400';
+      headers['ETag'] = `"${stat.size}-${stat.mtimeMs}"`;
+    }
+    // ETag support: return 304 if client has current version
+    const ifNoneMatch = req.headers['if-none-match'];
+    if (headers['ETag'] && ifNoneMatch === headers['ETag']) {
+      res.writeHead(304, headers);
+      res.end();
+      return;
+    }
+    res.writeHead(200, headers);
     res.end(data);
   } catch {
     res.writeHead(404);

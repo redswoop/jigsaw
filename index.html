@@ -628,6 +628,7 @@ button.report-bug:disabled { opacity: 0.3; cursor: default; }
     <div v-if="menuOpen" class="menu-backdrop" @click="menuOpen = false"></div>
     <div v-if="menuOpen" class="mobile-menu" @click.stop>
       <div class="menu-label">Difficulty</div>
+      <button @click="pickDifficulty(2)">Kids <span style="opacity:0.4; font-size:0.75rem; margin-left:4px">6 pieces</span></button>
       <button @click="pickDifficulty(4)">Easy <span style="opacity:0.4; font-size:0.75rem; margin-left:4px">20 pieces</span></button>
       <button @click="pickDifficulty(6)">Medium <span style="opacity:0.4; font-size:0.75rem; margin-left:4px">48 pieces</span></button>
       <button @click="pickDifficulty(8)">Hard <span style="opacity:0.4; font-size:0.75rem; margin-left:4px">88 pieces</span></button>
