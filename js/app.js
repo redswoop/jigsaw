@@ -101,6 +101,11 @@ createApp({
       }
     }
 
+    // --- Thumbnails ---
+    function thumb(pack, img) {
+      return (pack.thumbnails && pack.thumbnails[img]) || img;
+    }
+
     // --- Pack card preview images ---
     function packPreviewImages(pack) {
       return pack.images.slice(0, 4);
@@ -278,7 +283,7 @@ createApp({
       currentScreen,
 
       // Packs
-      packs, currentPack, packPreviewImages,
+      packs, currentPack, packPreviewImages, thumb,
       selectedImage, selectedImageDims, pieceCountForCols,
 
       // Navigation

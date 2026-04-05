@@ -25,7 +25,7 @@
         @click="selectPackAndGo(pack)"
       >
         <div class="pack-card-mosaic">
-          <img v-for="img in packPreviewImages(pack)" :key="img" :src="img" :alt="pack.label" loading="lazy">
+          <img v-for="img in packPreviewImages(pack)" :key="img" :src="thumb(pack, img)" :alt="pack.label" loading="lazy">
         </div>
         <div class="pack-card-info">
           <span class="pack-card-name">{{ pack.label }}</span>
@@ -47,7 +47,7 @@
         class="image-card"
         @click="selectImageAndGo(img)"
       >
-        <img :src="img" :alt="'Image ' + (i + 1)" loading="lazy">
+        <img :src="thumb(currentPack, img)" :alt="'Image ' + (i + 1)" loading="lazy">
       </button>
     </div>
   </div>

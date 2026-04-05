@@ -62,7 +62,7 @@ const server = http.createServer(async (req, res) => {
         if (!entry.isDirectory()) continue;
         const packDir = path.join(IMAGES_DIR, entry.name);
         const files = fs.readdirSync(packDir);
-        const images = files.filter(f => /\.(png|jpe?g|webp)$/i.test(f)).sort((a, b) => {
+        const images = files.filter(f => !f.startsWith('.') && /\.(png|jpe?g|webp)$/i.test(f)).sort((a, b) => {
           const na = parseInt(a.match(/\d+/)?.[0] || '0', 10);
           const nb = parseInt(b.match(/\d+/)?.[0] || '0', 10);
           return na - nb;
@@ -83,10 +83,20 @@ const server = http.createServer(async (req, res) => {
             console.warn(`[packs] bad names.json in ${entry.name}:`, e.message);
           }
         }
+        // Build thumbnails map: full path → thumb path (if thumbs/ subdir exists)
+        const thumbsDir = path.join(packDir, 'thumbs');
+        const thumbFiles = fs.existsSync(thumbsDir) ? new Set(fs.readdirSync(thumbsDir)) : new Set();
+        const thumbnails = {};
+        for (const img of images) {
+          if (thumbFiles.has(img)) {
+            thumbnails[`images/${entry.name}/${img}`] = `images/${entry.name}/thumbs/${img}`;
+          }
+        }
         packs.push({
           name: entry.name,
           label: entry.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
           images: images.map(f => `images/${entry.name}/${f}`),
+          thumbnails,
           names,
           videos: Object.fromEntries(
             images.map(img => {
