@@ -62,7 +62,15 @@ const server = http.createServer(async (req, res) => {
         if (!entry.isDirectory()) continue;
         const packDir = path.join(IMAGES_DIR, entry.name);
         const files = fs.readdirSync(packDir);
-        const images = files.filter(f => !f.startsWith('.') && /\.(png|jpe?g|webp)$/i.test(f)).sort((a, b) => {
+        // Deduplicate: prefer .webp over .png/.jpg for same base name
+        const imageFiles = files.filter(f => !f.startsWith('.') && /\.(png|jpe?g|webp)$/i.test(f));
+        const byBase = new Map();
+        for (const f of imageFiles) {
+          const base = f.replace(/\.[^.]+$/, '');
+          const existing = byBase.get(base);
+          if (!existing || f.endsWith('.webp')) byBase.set(base, f);
+        }
+        const images = [...byBase.values()].sort((a, b) => {
           const na = parseInt(a.match(/\d+/)?.[0] || '0', 10);
           const nb = parseInt(b.match(/\d+/)?.[0] || '0', 10);
           return na - nb;
@@ -75,9 +83,11 @@ const server = http.createServer(async (req, res) => {
         if (fs.existsSync(namesFile)) {
           try {
             const raw = JSON.parse(fs.readFileSync(namesFile, 'utf8'));
-            // Map filename keys to full image paths
-            for (const [key, val] of Object.entries(raw)) {
-              names[`images/${entry.name}/${key}`] = val;
+            // Map filename keys to full image paths (match by base name for format flexibility)
+            const namesByBase = new Map(Object.entries(raw).map(([k, v]) => [k.replace(/\.[^.]+$/, ''), v]));
+            for (const img of images) {
+              const base = img.replace(/\.[^.]+$/, '');
+              if (namesByBase.has(base)) names[`images/${entry.name}/${img}`] = namesByBase.get(base);
             }
           } catch (e) {
             console.warn(`[packs] bad names.json in ${entry.name}:`, e.message);
