@@ -84,11 +84,16 @@ const server = http.createServer(async (req, res) => {
           }
         }
         // Build thumbnails map: full path → thumb path (if thumbs/ subdir exists)
+        // Thumbs may be WebP regardless of source format
         const thumbsDir = path.join(packDir, 'thumbs');
         const thumbFiles = fs.existsSync(thumbsDir) ? new Set(fs.readdirSync(thumbsDir)) : new Set();
         const thumbnails = {};
         for (const img of images) {
-          if (thumbFiles.has(img)) {
+          const base = img.replace(/\.[^.]+$/, '');
+          const webpThumb = base + '.webp';
+          if (thumbFiles.has(webpThumb)) {
+            thumbnails[`images/${entry.name}/${img}`] = `images/${entry.name}/thumbs/${webpThumb}`;
+          } else if (thumbFiles.has(img)) {
             thumbnails[`images/${entry.name}/${img}`] = `images/${entry.name}/thumbs/${img}`;
           }
         }
