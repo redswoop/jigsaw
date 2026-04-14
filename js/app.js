@@ -322,6 +322,7 @@ createApp({
     }
     watch(() => game.won.value, async (isWon) => {
       if (!isWon || submittingScore) return;
+      if (game.scoreSubmitted.value) return;   // already recorded for this game session
       submittingScore = true;
       try {
         let player = identity.value || await ensurePlayer();
@@ -341,6 +342,8 @@ createApp({
             throw e;
           }
         }
+        game.scoreSubmitted.value = true;
+        game.saveState();    // persist the flag so a reload doesn't re-submit
       } catch (e) {
         console.warn('score submit failed:', e);
         game.winResult.value = { error: e.message || String(e) };

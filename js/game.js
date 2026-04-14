@@ -52,6 +52,7 @@ export function createGameEngine() {
   const packMult = ref(1.0);            // set by app.js when pack is known
   const liveSeconds = ref(0);           // driven by a 1s ticker while playing
   const winResult = ref(null);          // { score, puzzleRank, globalRank, personalBest } after submit
+  const scoreSubmitted = ref(false);    // persisted: blocks dup submits across page reloads
   let tickHandle = null;
 
   function startTicker() {
@@ -177,6 +178,7 @@ export function createGameEngine() {
         undoStack.length = 0;
         gameStartedAt.value = new Date().toISOString();
         winResult.value = null;
+        scoreSubmitted.value = false;
         liveSeconds.value = 0;
         initGame();
         saveState();
@@ -243,6 +245,7 @@ export function createGameEngine() {
       moveCount: moveCount.value, moveLog: moveLog.slice(),
       undoStack: undoStack.slice(),
       gameStartedAt: gameStartedAt.value,
+      scoreSubmitted: scoreSubmitted.value,
     };
     try { localStorage.setItem('jigsaw_state', JSON.stringify(state)); } catch(e) {}
   }
@@ -307,6 +310,7 @@ export function createGameEngine() {
       undoStack.length = 0;
       if (state.undoStack) undoStack.push(...state.undoStack);
       gameStartedAt.value = state.gameStartedAt || new Date().toISOString();
+      scoreSubmitted.value = !!state.scoreSubmitted;
 
       checkMerges();
       won.value = false;
@@ -935,7 +939,7 @@ export function createGameEngine() {
     bugStatus, gameStartedAt, moveLog,
 
     // Scoring
-    packMult, liveSeconds, currentScore, winResult,
+    packMult, liveSeconds, currentScore, winResult, scoreSubmitted,
 
     // Methods
     startGame, initGame, undo, computeScale, computeGridSize,
