@@ -204,6 +204,40 @@ createApp({
       });
     }
 
+    // Open leaderboard for the currently previewed image. Pick the variant
+    // with the most recorded plays if we know about one, otherwise default
+    // to 6×… (Medium) so there's always something to show.
+    function openImageLeaderboard() {
+      if (!currentPack.value || !selectedImage.value) return;
+      const variants = puzzleSummary.value?.variants || [];
+      let pick = null;
+      for (const v of variants) {
+        if (!pick || (v.plays || 0) > (pick.plays || 0)) pick = v;
+      }
+      const cols = pick ? pick.cols : 6;
+      const rows = pick ? pick.rows : rowsForCols(6);
+      if (rows == null) return;
+      openLeaderboard({
+        pack: currentPack.value.name,
+        image: selectedImage.value,
+        rows, cols,
+      });
+    }
+
+    // Display name for the image currently loaded on the setup screen.
+    const selectedImageName = computed(() => {
+      if (!currentPack.value || !selectedImage.value) return '';
+      return currentPack.value.names?.[selectedImage.value] || '';
+    });
+
+    // m:ss timer label for the puzzle toolbar.
+    const liveTimeLabel = computed(() => {
+      const s = game.liveSeconds.value | 0;
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${m}:${String(r).padStart(2, '0')}`;
+    });
+
     async function startPuzzle(cols) {
       await game.startGame(selectedImage.value, cols);
       navigateTo('puzzle');
@@ -674,6 +708,10 @@ createApp({
 
       // Setup screen stats
       puzzleSummary, summaryFor, openSetupLeaderboard,
+      selectedImageName, openImageLeaderboard,
+
+      // Puzzle toolbar
+      liveTimeLabel,
 
       // Confirmation modal
       pendingAction, confirmYes,

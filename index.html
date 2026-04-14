@@ -20,7 +20,7 @@
       <div class="home-nav">
         <button class="home-nav-btn" @click="openLeaderboard()">Leaderboard</button>
         <button class="home-nav-btn" @click="openSettings()">
-          {{ identity ? publicNameFor(identity) : 'Sign in' }}
+          {{ identity ? publicNameFor(identity) : 'Profile' }}
         </button>
       </div>
     </header>
@@ -62,34 +62,44 @@
   <div v-if="currentScreen === 'setup'" class="screen screen-setup">
     <header class="setup-header">
       <button class="back-btn" @click="navigateTo('picker')">&larr;</button>
-      <h2>Choose Difficulty</h2>
+      <h2>{{ selectedImageName || 'Choose Difficulty' }}</h2>
     </header>
     <div class="setup-body">
       <div class="setup-preview">
         <img :src="selectedImage" alt="Selected puzzle">
       </div>
-      <div class="difficulty-options">
-        <div v-for="d in [{cols:2,label:'Kids'},{cols:4,label:'Easy'},{cols:6,label:'Medium'},{cols:8,label:'Hard'}]" :key="d.cols" class="difficulty-row">
-          <button class="difficulty-btn" @click="startPuzzle(d.cols)">
+      <div class="difficulty-column">
+        <div class="difficulty-eyebrow">Choose difficulty</div>
+        <div class="difficulty-options">
+          <button
+            v-for="(d, i) in [{cols:2,label:'Kids'},{cols:4,label:'Easy'},{cols:6,label:'Medium'},{cols:8,label:'Hard'}]"
+            :key="d.cols"
+            :class="['difficulty-btn', 'difficulty-level-' + (i + 1)]"
+            @click="startPuzzle(d.cols)"
+          >
+            <span class="difficulty-pips" :aria-hidden="true">
+              <span v-for="n in 4" :key="n" :class="['difficulty-pip', { filled: n <= i + 1 }]"></span>
+            </span>
             <span class="difficulty-main">
               <span class="difficulty-label">{{ d.label }}</span>
               <span class="difficulty-pieces">{{ pieceCountForCols(d.cols) }} pieces</span>
             </span>
-            <span v-if="summaryFor(d.cols)" class="difficulty-stats">
-              <span v-if="summaryFor(d.cols).mine" class="difficulty-stat difficulty-mine">
-                Your best: <b>{{ summaryFor(d.cols).mine.bestScore }}</b>
+            <span class="difficulty-stats">
+              <span class="difficulty-stat difficulty-mine">
+                <span class="difficulty-stat-label">Your best</span>
+                <b>{{ summaryFor(d.cols) && summaryFor(d.cols).mine ? summaryFor(d.cols).mine.bestScore : '—' }}</b>
               </span>
-              <span v-if="summaryFor(d.cols).top" class="difficulty-stat difficulty-top">
-                Record: <b>{{ summaryFor(d.cols).top.score }}</b>
-                <span class="difficulty-top-by">by {{ publicNameFor(summaryFor(d.cols).top) }}</span>
+              <span class="difficulty-stat difficulty-top">
+                <span class="difficulty-stat-label">Record</span>
+                <b>{{ summaryFor(d.cols) && summaryFor(d.cols).top ? summaryFor(d.cols).top.score : '—' }}</b>
+                <span v-if="summaryFor(d.cols) && summaryFor(d.cols).top" class="difficulty-top-by">by {{ publicNameFor(summaryFor(d.cols).top) }}</span>
               </span>
             </span>
           </button>
-          <button class="difficulty-trophy"
-                  @click="openSetupLeaderboard(d.cols)"
-                  :title="'Leaderboard for ' + d.label"
-                  aria-label="View leaderboard for this difficulty">🏆</button>
         </div>
+        <button class="setup-leaderboard-link" @click="openImageLeaderboard">
+          View leaderboard for this image &rarr;
+        </button>
       </div>
     </div>
   </div>
@@ -107,8 +117,9 @@
       </button>
       <span class="toolbar-title">Jigsaw</span>
       <div class="toolbar-spacer"></div>
-      <span class="toolbar-moves">{{ moveCount }} moves</span>
-      <span v-if="currentScore !== null" class="toolbar-score" :title="'Projected score (' + liveSeconds + 's)'">{{ currentScore }}</span>
+      <span class="toolbar-time" :title="'Elapsed time'">{{ liveTimeLabel }}</span>
+      <span class="toolbar-moves">{{ moveCount }} {{ moveCount === 1 ? 'move' : 'moves' }}</span>
+      <span v-if="currentScore !== null" class="toolbar-score" :title="'Projected score'">{{ currentScore }} pts</span>
       <button class="toolbar-btn" @click="undo" :disabled="!canUndo" title="Undo">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="1 4 1 10 7 10"/>
@@ -289,7 +300,7 @@
   <div v-if="currentScreen === 'settings'" class="screen screen-settings">
     <header class="picker-header">
       <button class="back-btn" @click="navigateTo('home')">&larr;</button>
-      <h2>Your Identity</h2>
+      <h2>Profile</h2>
     </header>
     <div class="settings-body">
       <div v-if="identity" class="settings-section">
