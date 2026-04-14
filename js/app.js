@@ -635,9 +635,9 @@ createApp({
       adminLoad();
     }
 
-    function formatRelative(iso) {
-      if (!iso) return '';
-      const then = Date.parse(iso);
+    function formatRelative(when) {
+      if (when == null) return '';
+      const then = typeof when === 'number' ? when : Date.parse(when);
       if (!Number.isFinite(then)) return '';
       const diffSec = Math.max(0, Math.round((Date.now() - then) / 1000));
       if (diffSec < 60) return 'just now';
