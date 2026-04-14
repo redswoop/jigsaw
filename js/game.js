@@ -1,5 +1,6 @@
 // Puzzle engine — tiles, groups, grid, moves, merges, drag, undo
 import { playThump, playClick, enableSound } from './sounds.js';
+import { computeScore } from './scoring.js';
 
 const { reactive, ref, computed, nextTick } = Vue;
 
@@ -46,6 +47,35 @@ export function createGameEngine() {
   const undoStack = reactive([]);
   const gameStartedAt = ref(new Date().toISOString());
   const bugStatus = ref('');
+
+  // Scoring
+  const packMult = ref(1.0);            // set by app.js when pack is known
+  const liveSeconds = ref(0);           // driven by a 1s ticker while playing
+  const winResult = ref(null);          // { score, puzzleRank, globalRank, personalBest } after submit
+  let tickHandle = null;
+
+  function startTicker() {
+    stopTicker();
+    tickHandle = setInterval(() => {
+      if (won.value) { stopTicker(); return; }
+      const startMs = Date.parse(gameStartedAt.value) || Date.now();
+      liveSeconds.value = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+    }, 1000);
+  }
+  function stopTicker() {
+    if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
+  }
+
+  const currentScore = computed(() => {
+    if (moveCount.value === 0) return null;
+    const durationMs = liveSeconds.value * 1000;
+    return computeScore({
+      rows: ROWS.value, cols: COLS.value,
+      moves: moveCount.value,
+      durationMs,
+      packMult: packMult.value,
+    });
+  });
 
   // Drag state
   let dragGroupId = null;
@@ -146,8 +176,11 @@ export function createGameEngine() {
         moveLog.length = 0;
         undoStack.length = 0;
         gameStartedAt.value = new Date().toISOString();
+        winResult.value = null;
+        liveSeconds.value = 0;
         initGame();
         saveState();
+        startTicker();
         nextTick(computeScale);
         resolve();
       };
@@ -277,7 +310,9 @@ export function createGameEngine() {
 
       checkMerges();
       won.value = false;
+      winResult.value = null;
       checkWin();
+      if (!won.value) startTicker();
 
       return true;
     } catch(e) {
@@ -759,7 +794,22 @@ export function createGameEngine() {
     });
     if (allCorrect && tiles.length > 0) {
       won.value = true;
+      stopTicker();
+      const startMs = Date.parse(gameStartedAt.value) || Date.now();
+      liveSeconds.value = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
     }
+  }
+
+  function getCompletionSnapshot() {
+    const startMs = Date.parse(gameStartedAt.value) || Date.now();
+    return {
+      rows: ROWS.value,
+      cols: COLS.value,
+      moves: moveCount.value,
+      durationMs: Math.max(0, Date.now() - startMs),
+      clientStartedAt: startMs,
+      image: imgSrc.value,
+    };
   }
 
   // --- Bug Reporting ---
@@ -884,12 +934,15 @@ export function createGameEngine() {
     dropHighlights, dropValid, draggingTileIds,
     bugStatus, gameStartedAt, moveLog,
 
+    // Scoring
+    packMult, liveSeconds, currentScore, winResult,
+
     // Methods
     startGame, initGame, undo, computeScale, computeGridSize,
     loadImageDimensions,
     tileStyle, tileClasses,
     onPointerDown, onPointerMove, onPointerUp,
     saveState, restoreState, reportBug,
-    checkIntegrity,
+    checkIntegrity, getCompletionSnapshot, stopTicker, startTicker,
   };
 }

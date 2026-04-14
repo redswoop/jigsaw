@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+#
+# CLI tool for administering the jigsaw leaderboard.
+#
+# Usage:
+#   ./jigsaw-scores                       List players with totals
+#   ./jigsaw-scores players [search]      List / search players
+#   ./jigsaw-scores player <code>         Show player + recent scores
+#   ./jigsaw-scores rename <code> [name]  Set display name ('' clears)
+#   ./jigsaw-scores lock <code>           Lock a display name
+#   ./jigsaw-scores unlock <code>         Unlock a display name
+#   ./jigsaw-scores delete-player <code>  Delete a player and their scores
+#   ./jigsaw-scores delete-score <id>     Delete a single score row
+#   ./jigsaw-scores recompute             Recompute all scores from raw inputs
+#
+# Env:
+#   JIGSAW_URL     base URL (default http://localhost:3002)
+#   ADMIN_TOKEN    admin token (not required when hitting localhost)
+
+set -euo pipefail
+
+URL="${JIGSAW_URL:-http://localhost:3002}"
+TOKEN_HDR=()
+if [ -n "${ADMIN_TOKEN:-}" ]; then
+  TOKEN_HDR=(-H "x-admin-token: ${ADMIN_TOKEN}")
+fi
+
+list_players() {
+  local search="${1:-}"
+  local q=""
+  [ -n "$search" ] && q="?search=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$search")"
+  curl -sf ${TOKEN_HDR[@]+"${TOKEN_HDR[@]}"} "$URL/api/admin/players$q" | python3 -c "
+import sys, json, datetime
+players = json.load(sys.stdin)
+if not players:
+    print('  (none)'); sys.exit(0)
+print(f\"  {'CODE':<8} {'NAME':<22} {'PLAYS':>5} {'TOTAL':>8}  LAST SEEN\")
+for p in players:
+    name = (p.get('display_name') or '—')[:22]
+    lock = '🔒' if p.get('name_locked') else ' '
+    ls = p.get('last_seen_at') or 0
+    lsd = datetime.datetime.fromtimestamp(ls/1000).strftime('%Y-%m-%d') if ls else '—'
+    print(f\"  {p['code']:<8} {name:<22}{lock} {p['plays']:>5} {p['total']:>8}  {lsd}\")
+"
+}
+
+player_detail() {
+  local code="$1"
+  curl -sf ${TOKEN_HDR[@]+"${TOKEN_HDR[@]}"} "$URL/api/players/$code/scores?limit=50" | python3 -c "
+import sys, json, datetime
+d = json.load(sys.stdin)
+p = d['player']; scores = d['scores']
+print(f\"{p['code']}  {p.get('displayName') or '(no name)'}  locked={p.get('nameLocked')}\")
+print(f\"plays={len(scores)}\"); print()
+for s in scores:
+    ts = datetime.datetime.fromtimestamp(s['created_at']/1000).strftime('%Y-%m-%d %H:%M')
+    dur = s['duration_ms'] // 1000
+    print(f\"  {ts}  {s['pack']:<16} {s['cols']}x{s['rows']}  {s['moves']:>4}mv  {dur:>4}s  {s['score']:>6}\")
+"
+}
+
+admin_patch() {
+  local code="$1"; shift
+  curl -sf -X PATCH ${TOKEN_HDR[@]+"${TOKEN_HDR[@]}"} -H "Content-Type: application/json" \
+    -d "$1" "$URL/api/admin/players/$code" >/dev/null
+}
+
+cmd="${1:-players}"
+case "$cmd" in
+  ""|players)
+    list_players "${2:-}"
+    ;;
+  player)
+    [ -z "${2:-}" ] && { echo "usage: $0 player <code>"; exit 1; }
+    player_detail "$2"
+    ;;
+  rename)
+    [ -z "${2:-}" ] && { echo "usage: $0 rename <code> [name]"; exit 1; }
+    name="${3:-}"
+    if [ -z "$name" ]; then
+      admin_patch "$2" '{"displayName":null}'
+    else
+      payload=$(python3 -c 'import json,sys; print(json.dumps({"displayName": sys.argv[1]}))' "$name")
+      admin_patch "$2" "$payload"
+    fi
+    echo "ok"
+    ;;
+  lock)
+    [ -z "${2:-}" ] && { echo "usage: $0 lock <code>"; exit 1; }
+    admin_patch "$2" '{"nameLocked":true}'
+    echo "ok"
+    ;;
+  unlock)
+    [ -z "${2:-}" ] && { echo "usage: $0 unlock <code>"; exit 1; }
+    admin_patch "$2" '{"nameLocked":false}'
+    echo "ok"
+    ;;
+  delete-player)
+    [ -z "${2:-}" ] && { echo "usage: $0 delete-player <code>"; exit 1; }
+    curl -sf -X DELETE ${TOKEN_HDR[@]+"${TOKEN_HDR[@]}"} "$URL/api/admin/players/$2" >/dev/null
+    echo "deleted $2"
+    ;;
+  delete-score)
+    [ -z "${2:-}" ] && { echo "usage: $0 delete-score <id>"; exit 1; }
+    curl -sf -X DELETE ${TOKEN_HDR[@]+"${TOKEN_HDR[@]}"} "$URL/api/admin/scores/$2" >/dev/null
+    echo "deleted score $2"
+    ;;
+  recompute)
+    curl -sf -X POST ${TOKEN_HDR[@]+"${TOKEN_HDR[@]}"} "$URL/api/admin/recompute" | python3 -m json.tool
+    ;;
+  *)
+    echo "Unknown command: $cmd"
+    sed -n '3,18p' "$0"
+    exit 1
+    ;;
+esac

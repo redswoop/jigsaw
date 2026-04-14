@@ -1,13 +1,19 @@
 // Vue app shell — screen routing, pack loading, glue
 import { createGameEngine } from './game.js';
 import { soundOn, toggleSound } from './sounds.js';
+import {
+  loadIdentity, ensurePlayer, claimPlayer, setDisplayName, clearIdentity,
+} from './identity.js';
+import {
+  submitScore, fetchPuzzleLeaderboard, fetchGlobalLeaderboard, fetchPlayerScores,
+} from './leaderboard.js';
 
 const { createApp, ref, computed, onMounted, onUnmounted, nextTick, watch } = Vue;
 
 createApp({
   setup() {
     // --- Screen state ---
-    const currentScreen = ref('home');  // 'home' | 'picker' | 'setup' | 'puzzle'
+    const currentScreen = ref('home');  // 'home' | 'picker' | 'setup' | 'puzzle' | 'leaderboard' | 'settings' | 'admin'
 
     // Scroll to top on screen change
     watch(currentScreen, () => window.scrollTo(0, 0));
@@ -97,9 +103,15 @@ createApp({
       const pack = packs.value.find(p => p.name === packName);
       if (pack) {
         currentPack.value = pack;
+        game.packMult.value = pack.difficulty || 1.0;
         localStorage.setItem('jigsaw_pack', packName);
       }
     }
+
+    // Keep packMult in sync if currentPack is set before packs load / on restore
+    watch(currentPack, (p) => {
+      if (p) game.packMult.value = p.difficulty || 1.0;
+    });
 
     // --- Thumbnails ---
     function thumb(pack, img) {
@@ -210,6 +222,219 @@ createApp({
       history.replaceState(history.state, '', url);
     }
 
+    // --- Identity ---
+    const identity = ref(loadIdentity()); // { code, displayName } | null
+
+    // --- Win → submit score ---
+    let submittingScore = false;
+    watch(() => game.won.value, async (isWon) => {
+      if (!isWon || submittingScore) return;
+      submittingScore = true;
+      try {
+        const player = identity.value || await ensurePlayer();
+        identity.value = player;
+        const snap = game.getCompletionSnapshot();
+        const result = await submitScore({
+          code: player.code,
+          pack: currentPack.value ? currentPack.value.name : '',
+          image: snap.image,
+          rows: snap.rows,
+          cols: snap.cols,
+          moves: snap.moves,
+          durationMs: snap.durationMs,
+          clientStartedAt: snap.clientStartedAt,
+          handicaps: {},
+        });
+        game.winResult.value = result;
+      } catch (e) {
+        console.warn('score submit failed:', e);
+        game.winResult.value = { error: e.message || String(e) };
+      } finally {
+        submittingScore = false;
+      }
+    });
+
+    // --- Leaderboard screen ---
+    const leaderboardTab = ref('puzzle'); // 'puzzle' | 'global' | 'me'
+    const leaderboardLoading = ref(false);
+    const puzzleBoard = ref([]);
+    const globalBoard = ref([]);
+    const myScores = ref([]);
+    const leaderboardContext = ref(null); // { pack, image, rows, cols } snapshot for 'puzzle' tab
+
+    async function refreshLeaderboard() {
+      leaderboardLoading.value = true;
+      try {
+        if (leaderboardTab.value === 'puzzle' && leaderboardContext.value) {
+          const ctx = leaderboardContext.value;
+          puzzleBoard.value = await fetchPuzzleLeaderboard(ctx);
+        } else if (leaderboardTab.value === 'global') {
+          globalBoard.value = await fetchGlobalLeaderboard(50);
+        } else if (leaderboardTab.value === 'me' && identity.value) {
+          const data = await fetchPlayerScores(identity.value.code, 50);
+          myScores.value = data.scores || [];
+        }
+      } catch (e) {
+        console.warn('leaderboard fetch failed:', e);
+      } finally {
+        leaderboardLoading.value = false;
+      }
+    }
+
+    watch(leaderboardTab, () => refreshLeaderboard());
+
+    function openLeaderboard(context) {
+      if (context) {
+        leaderboardContext.value = context;
+        leaderboardTab.value = 'puzzle';
+      } else {
+        leaderboardContext.value = null;
+        leaderboardTab.value = 'global';
+      }
+      navigateTo('leaderboard');
+      refreshLeaderboard();
+    }
+
+    function openLeaderboardFromVictory() {
+      openLeaderboard({
+        pack: currentPack.value ? currentPack.value.name : '',
+        image: game.imgSrc.value,
+        rows: game.ROWS.value,
+        cols: game.COLS.value,
+      });
+    }
+
+    // --- Settings screen ---
+    const settingsNameInput = ref('');
+    const settingsClaimInput = ref('');
+    const settingsStatus = ref('');
+
+    function openSettings() {
+      settingsNameInput.value = identity.value?.displayName || '';
+      settingsClaimInput.value = '';
+      settingsStatus.value = '';
+      navigateTo('settings');
+    }
+
+    async function saveDisplayName() {
+      settingsStatus.value = '';
+      try {
+        if (!identity.value) identity.value = await ensurePlayer();
+        const updated = await setDisplayName(identity.value.code, settingsNameInput.value.trim());
+        identity.value = updated;
+        settingsStatus.value = 'Saved';
+      } catch (e) {
+        settingsStatus.value = e.message || 'Failed';
+      }
+    }
+
+    async function claimCode() {
+      settingsStatus.value = '';
+      const raw = settingsClaimInput.value.trim().toUpperCase();
+      if (!/^[A-Z]{6}$/.test(raw)) {
+        settingsStatus.value = 'Code must be 6 letters';
+        return;
+      }
+      try {
+        const mergeFrom = identity.value?.code;
+        const player = await claimPlayer(raw, mergeFrom && mergeFrom !== raw ? mergeFrom : undefined);
+        identity.value = player;
+        settingsNameInput.value = player.displayName || '';
+        settingsClaimInput.value = '';
+        settingsStatus.value = mergeFrom && mergeFrom !== raw ? `Claimed & merged from ${mergeFrom}` : 'Claimed';
+      } catch (e) {
+        settingsStatus.value = e.message || 'Failed';
+      }
+    }
+
+    // --- Admin screen ---
+    const adminToken = ref(sessionStorage.getItem('jigsaw_admin_token') || '');
+    const adminPlayers = ref([]);
+    const adminStatus = ref('');
+    const adminSearch = ref('');
+
+    function adminHeaders() {
+      return adminToken.value ? { 'x-admin-token': adminToken.value } : {};
+    }
+
+    async function adminLoad() {
+      adminStatus.value = '';
+      try {
+        const q = adminSearch.value ? `?search=${encodeURIComponent(adminSearch.value)}` : '';
+        const res = await fetch(`/api/admin/players${q}`, { headers: adminHeaders() });
+        if (res.status === 401) { adminStatus.value = 'Unauthorized — check token'; return; }
+        adminPlayers.value = await res.json();
+      } catch (e) {
+        adminStatus.value = e.message;
+      }
+    }
+
+    function openAdmin() {
+      if (adminToken.value) sessionStorage.setItem('jigsaw_admin_token', adminToken.value);
+      navigateTo('admin');
+      adminLoad();
+    }
+
+    function saveAdminToken() {
+      sessionStorage.setItem('jigsaw_admin_token', adminToken.value);
+      adminLoad();
+    }
+
+    async function adminRename(code) {
+      const name = prompt(`New display name for ${code} (blank to clear)`, '');
+      if (name === null) return;
+      const res = await fetch(`/api/admin/players/${code}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+        body: JSON.stringify({ displayName: name || null }),
+      });
+      if (!res.ok) { adminStatus.value = `Rename failed (${res.status})`; return; }
+      adminLoad();
+    }
+
+    async function adminToggleLock(player) {
+      const res = await fetch(`/api/admin/players/${player.code}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+        body: JSON.stringify({ nameLocked: !player.name_locked }),
+      });
+      if (!res.ok) { adminStatus.value = `Lock toggle failed (${res.status})`; return; }
+      adminLoad();
+    }
+
+    async function adminDelete(code) {
+      if (!confirm(`Delete player ${code} and all their scores?`)) return;
+      const res = await fetch(`/api/admin/players/${code}`, {
+        method: 'DELETE',
+        headers: adminHeaders(),
+      });
+      if (!res.ok) { adminStatus.value = `Delete failed (${res.status})`; return; }
+      adminLoad();
+    }
+
+    async function adminRecompute() {
+      if (!confirm('Recompute all scores from raw inputs?')) return;
+      const res = await fetch('/api/admin/recompute', {
+        method: 'POST', headers: adminHeaders(),
+      });
+      if (!res.ok) { adminStatus.value = `Recompute failed (${res.status})`; return; }
+      const data = await res.json();
+      adminStatus.value = `Recomputed ${data.updated} scores`;
+      adminLoad();
+    }
+
+    function formatDuration(ms) {
+      const s = Math.floor(ms / 1000);
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return m ? `${m}m${String(r).padStart(2,'0')}s` : `${r}s`;
+    }
+
+    function packLabelFor(packName) {
+      const p = packs.value.find(pp => pp.name === packName);
+      return p ? p.label : packName;
+    }
+
     // --- Init ---
     onMounted(async () => {
       // Set initial history state
@@ -267,6 +492,11 @@ createApp({
         }
       }
 
+      // Deep-link to admin via ?admin=1
+      if (urlParams.get('admin') === '1') {
+        openAdmin();
+      }
+
       window.addEventListener('resize', onResize);
       window.addEventListener('popstate', handlePopState);
       document.addEventListener('gesturestart', preventGesture);
@@ -289,6 +519,25 @@ createApp({
       // Navigation
       goHome, selectPackAndGo, selectImageAndGo, startPuzzle,
       confirmGoHome, confirmNewPuzzle, navigateTo,
+      openLeaderboard, openLeaderboardFromVictory, openSettings, openAdmin,
+
+      // Identity
+      identity,
+
+      // Leaderboard
+      leaderboardTab, leaderboardLoading, leaderboardContext,
+      puzzleBoard, globalBoard, myScores, refreshLeaderboard,
+
+      // Settings screen
+      settingsNameInput, settingsClaimInput, settingsStatus,
+      saveDisplayName, claimCode,
+
+      // Admin
+      adminToken, adminPlayers, adminStatus, adminSearch,
+      saveAdminToken, adminLoad, adminRename, adminToggleLock, adminDelete, adminRecompute,
+
+      // Helpers
+      formatDuration, packLabelFor,
 
       // Confirmation modal
       pendingAction, confirmYes,
@@ -321,6 +570,9 @@ createApp({
       draggingTileIds: game.draggingTileIds,
       moveCount: game.moveCount,
       canUndo: game.canUndo,
+      currentScore: game.currentScore,
+      liveSeconds: game.liveSeconds,
+      winResult: game.winResult,
       bugStatus: game.bugStatus,
       tileStyle: game.tileStyle,
       tileClasses: game.tileClasses,

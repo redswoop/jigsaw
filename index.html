@@ -17,6 +17,12 @@
     <header class="home-header">
       <h1>Jigsaw</h1>
       <p class="home-subtitle">Choose a collection</p>
+      <div class="home-nav">
+        <button class="home-nav-btn" @click="openLeaderboard()">Leaderboard</button>
+        <button class="home-nav-btn" @click="openSettings()">
+          {{ identity ? (identity.displayName || identity.code) : 'Sign in' }}
+        </button>
+      </div>
     </header>
     <div class="pack-gallery">
       <button
@@ -97,6 +103,7 @@
       <span class="toolbar-title">Jigsaw</span>
       <div class="toolbar-spacer"></div>
       <span class="toolbar-moves">{{ moveCount }} moves</span>
+      <span v-if="currentScore !== null" class="toolbar-score" :title="'Projected score (' + liveSeconds + 's)'">{{ currentScore }}</span>
       <button class="toolbar-btn" @click="undo" :disabled="!canUndo" title="Undo">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="1 4 1 10 7 10"/>
@@ -171,12 +178,158 @@
             preload="auto" id="victory-video"
             @loadeddata="$event.target.muted = true; $event.target.play().catch(() => {})"></video>
           <h2>Solved!</h2>
+          <div v-if="winResult && !winResult.error" class="victory-score">
+            <div class="victory-score-value">{{ winResult.score }}</div>
+            <div class="victory-score-meta">
+              #{{ winResult.puzzleRank }} on this puzzle &middot; #{{ winResult.globalRank }} overall
+              <span v-if="winResult.personalBest && winResult.score >= winResult.personalBest && winResult.score === winResult.personalBest" class="victory-pb"> &middot; personal best!</span>
+            </div>
+            <div v-if="identity" class="victory-code">You are <b>{{ identity.code }}</b><span v-if="!identity.displayName"> &mdash; save this code to sync devices</span></div>
+          </div>
+          <div v-else-if="winResult && winResult.error" class="victory-score">
+            <div class="victory-score-meta">Score not saved: {{ winResult.error }}</div>
+          </div>
           <div class="victory-actions">
             <button class="victory-btn-primary" @click="confirmNewPuzzle">New Puzzle</button>
+            <button class="victory-btn-secondary" @click="openLeaderboardFromVictory">Leaderboard</button>
             <button class="victory-btn-secondary" @click="confirmGoHome">Home</button>
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ============ Leaderboard Screen ============ -->
+  <div v-if="currentScreen === 'leaderboard'" class="screen screen-leaderboard">
+    <header class="picker-header">
+      <button class="back-btn" @click="navigateTo('home')">&larr;</button>
+      <h2>Leaderboard</h2>
+    </header>
+    <div class="lb-tabs">
+      <button :class="['lb-tab', { active: leaderboardTab === 'puzzle' }]"
+        :disabled="!leaderboardContext" @click="leaderboardTab = 'puzzle'">This Puzzle</button>
+      <button :class="['lb-tab', { active: leaderboardTab === 'global' }]"
+        @click="leaderboardTab = 'global'">Global</button>
+      <button :class="['lb-tab', { active: leaderboardTab === 'me' }]"
+        :disabled="!identity" @click="leaderboardTab = 'me'">My Scores</button>
+    </div>
+    <div class="lb-body">
+      <div v-if="leaderboardLoading" class="lb-loading">Loading&hellip;</div>
+
+      <table v-else-if="leaderboardTab === 'puzzle'" class="lb-table">
+        <thead><tr><th>#</th><th>Player</th><th>Score</th><th>Moves</th><th>Time</th></tr></thead>
+        <tbody>
+          <tr v-for="(row, i) in puzzleBoard" :key="row.id"
+              :class="{ 'lb-me': identity && row.player_code === identity.code }">
+            <td>{{ i + 1 }}</td>
+            <td>{{ row.display_name || row.player_code }}</td>
+            <td>{{ row.score }}</td>
+            <td>{{ row.moves }}</td>
+            <td>{{ formatDuration(row.duration_ms) }}</td>
+          </tr>
+          <tr v-if="!puzzleBoard.length"><td colspan="5" class="lb-empty">No scores yet &mdash; be the first!</td></tr>
+        </tbody>
+      </table>
+
+      <table v-else-if="leaderboardTab === 'global'" class="lb-table">
+        <thead><tr><th>#</th><th>Player</th><th>Total</th><th>Puzzles</th></tr></thead>
+        <tbody>
+          <tr v-for="(row, i) in globalBoard" :key="row.player_code"
+              :class="{ 'lb-me': identity && row.player_code === identity.code }">
+            <td>{{ i + 1 }}</td>
+            <td>{{ row.display_name || row.player_code }}</td>
+            <td>{{ row.total }}</td>
+            <td>{{ row.plays }}</td>
+          </tr>
+          <tr v-if="!globalBoard.length"><td colspan="4" class="lb-empty">No scores yet.</td></tr>
+        </tbody>
+      </table>
+
+      <table v-else-if="leaderboardTab === 'me'" class="lb-table">
+        <thead><tr><th>When</th><th>Pack</th><th>Size</th><th>Moves</th><th>Time</th><th>Score</th></tr></thead>
+        <tbody>
+          <tr v-for="s in myScores" :key="s.id">
+            <td>{{ new Date(s.created_at).toLocaleString() }}</td>
+            <td>{{ packLabelFor(s.pack) }}</td>
+            <td>{{ s.cols }}&times;{{ s.rows }}</td>
+            <td>{{ s.moves }}</td>
+            <td>{{ formatDuration(s.duration_ms) }}</td>
+            <td>{{ s.score }}</td>
+          </tr>
+          <tr v-if="!myScores.length"><td colspan="6" class="lb-empty">No scores yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ Settings Screen ============ -->
+  <div v-if="currentScreen === 'settings'" class="screen screen-settings">
+    <header class="picker-header">
+      <button class="back-btn" @click="navigateTo('home')">&larr;</button>
+      <h2>Your Identity</h2>
+    </header>
+    <div class="settings-body">
+      <div v-if="identity" class="settings-section">
+        <div class="settings-label">Your code</div>
+        <div class="settings-code">{{ identity.code }}</div>
+        <p class="settings-hint">Write this down. Enter it on another device to sync your scores.</p>
+      </div>
+      <div v-else class="settings-section">
+        <p class="settings-hint">You don't have a code yet. One will be generated the first time you complete a puzzle, or when you claim an existing code below.</p>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">Display name (optional)</div>
+        <input class="settings-input" v-model="settingsNameInput" maxlength="20" placeholder="Name shown on leaderboards">
+        <button class="settings-btn" @click="saveDisplayName" :disabled="!identity">Save name</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">I already have a code</div>
+        <input class="settings-input settings-input-code" v-model="settingsClaimInput" maxlength="6"
+          placeholder="ABCDEF" @input="settingsClaimInput = settingsClaimInput.toUpperCase()">
+        <button class="settings-btn" @click="claimCode">Claim code</button>
+        <p class="settings-hint">If this device already has scores under a different code, those will be merged into the claimed code.</p>
+      </div>
+
+      <div v-if="settingsStatus" class="settings-status-msg">{{ settingsStatus }}</div>
+    </div>
+  </div>
+
+  <!-- ============ Admin Screen ============ -->
+  <div v-if="currentScreen === 'admin'" class="screen screen-admin">
+    <header class="picker-header">
+      <button class="back-btn" @click="navigateTo('home')">&larr;</button>
+      <h2>Admin</h2>
+    </header>
+    <div class="admin-body">
+      <div class="admin-controls">
+        <input class="settings-input" v-model="adminToken" placeholder="Admin token" type="password">
+        <button class="settings-btn" @click="saveAdminToken">Use token</button>
+        <input class="settings-input" v-model="adminSearch" placeholder="Search code or name" @keyup.enter="adminLoad">
+        <button class="settings-btn" @click="adminLoad">Search</button>
+        <button class="settings-btn" @click="adminRecompute">Recompute all</button>
+      </div>
+      <div v-if="adminStatus" class="admin-status">{{ adminStatus }}</div>
+      <table class="lb-table">
+        <thead><tr><th>Code</th><th>Name</th><th>Lock</th><th>Plays</th><th>Total</th><th>Last seen</th><th></th></tr></thead>
+        <tbody>
+          <tr v-for="p in adminPlayers" :key="p.code">
+            <td>{{ p.code }}</td>
+            <td>{{ p.display_name || '—' }}</td>
+            <td>{{ p.name_locked ? '🔒' : '' }}</td>
+            <td>{{ p.plays }}</td>
+            <td>{{ p.total }}</td>
+            <td>{{ p.last_seen_at ? new Date(p.last_seen_at).toLocaleDateString() : '' }}</td>
+            <td class="admin-actions">
+              <button @click="adminRename(p.code)">Rename</button>
+              <button @click="adminToggleLock(p)">{{ p.name_locked ? 'Unlock' : 'Lock' }}</button>
+              <button class="admin-danger" @click="adminDelete(p.code)">Delete</button>
+            </td>
+          </tr>
+          <tr v-if="!adminPlayers.length"><td colspan="7" class="lb-empty">No players.</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 

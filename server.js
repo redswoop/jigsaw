@@ -3,16 +3,41 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { computeScore } from './js/scoring.js';
+import * as db from './server/db.js';
+import { loadPackMetadata, getPackMetadata, getAllPackMetadata } from './server/packs.js';
+import { isAdmin } from './server/admin.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = parseInt(process.env.PORT ?? '3002', 10);
 const BUGS_DIR = process.env.BUGS_DIR || path.join(__dirname, '.bugs');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '.data');
 const STATIC_DIR = __dirname;
 const IMAGES_DIR = path.join(__dirname, 'images');
 
-// Ensure bugs directory exists
+// Ensure directories exist
 fs.mkdirSync(BUGS_DIR, { recursive: true });
+db.initDb(DATA_DIR);
+loadPackMetadata(IMAGES_DIR);
+
+function requireAdmin(req, res) {
+  if (isAdmin(req)) return true;
+  sendJson(res, 401, { error: 'unauthorized' });
+  return false;
+}
+
+function scoreFor(row) {
+  const meta = getPackMetadata(row.pack);
+  return computeScore({
+    rows: row.rows,
+    cols: row.cols,
+    moves: row.moves,
+    durationMs: row.duration_ms ?? row.durationMs,
+    packMult: meta.difficulty,
+    handicaps: typeof row.handicaps === 'string' ? JSON.parse(row.handicaps || '{}') : (row.handicaps || {}),
+  });
+}
 
 const MIME = {
   '.html': 'text/html',
@@ -107,9 +132,12 @@ const server = http.createServer(async (req, res) => {
             thumbnails[`images/${entry.name}/${img}`] = `images/${entry.name}/thumbs/${img}`;
           }
         }
+        const meta = getPackMetadata(entry.name);
         packs.push({
           name: entry.name,
           label: entry.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          difficulty: meta.difficulty,
+          difficultyLabel: meta.label,
           images: images.map(f => `images/${entry.name}/${f}`),
           thumbnails,
           names,
@@ -218,6 +246,182 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // --- Leaderboard / identity routes ---
+
+  // POST /api/players — mint a new code
+  if (req.method === 'POST' && pathname === '/api/players') {
+    try {
+      const player = db.createPlayer();
+      sendJson(res, 201, player);
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return;
+  }
+
+  // POST /api/players/claim — claim code (optionally merging from old code)
+  if (req.method === 'POST' && pathname === '/api/players/claim') {
+    try {
+      const raw = await readBody(req);
+      const { code, mergeFrom } = JSON.parse(raw || '{}');
+      if (!/^[A-Z]{6}$/.test(String(code || ''))) {
+        sendJson(res, 400, { error: 'invalid code' });
+        return;
+      }
+      const result = db.claimAndMerge(code, mergeFrom);
+      if (!result.ok) { sendJson(res, result.status, { error: result.error }); return; }
+      sendJson(res, 200, result.player);
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return;
+  }
+
+  // PATCH /api/players/:code — set display name
+  if (req.method === 'PATCH' && pathname.startsWith('/api/players/')) {
+    const code = pathname.slice('/api/players/'.length);
+    if (!/^[A-Z]{6}$/.test(code)) { sendJson(res, 400, { error: 'invalid code' }); return; }
+    try {
+      const raw = await readBody(req);
+      const body = JSON.parse(raw || '{}');
+      const result = db.updatePlayerName(code, body.displayName ?? '');
+      if (!result.ok) { sendJson(res, result.status, { error: result.error }); return; }
+      sendJson(res, 200, result.player);
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return;
+  }
+
+  // GET /api/players/:code/scores — recent scores for one player
+  if (req.method === 'GET' && /^\/api\/players\/[A-Z]{6}\/scores$/.test(pathname)) {
+    const code = pathname.split('/')[3];
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
+    const player = db.getPlayer(code);
+    if (!player) { sendJson(res, 404, { error: 'not found' }); return; }
+    sendJson(res, 200, { player, scores: db.playerScores(code, limit) });
+    return;
+  }
+
+  // POST /api/scores — submit a completion
+  if (req.method === 'POST' && pathname === '/api/scores') {
+    try {
+      const raw = await readBody(req);
+      const body = JSON.parse(raw);
+      const code = String(body.code || '');
+      if (!/^[A-Z]{6}$/.test(code)) { sendJson(res, 400, { error: 'invalid code' }); return; }
+      const player = db.getPlayer(code);
+      if (!player) { sendJson(res, 404, { error: 'unknown code' }); return; }
+
+      const rows = parseInt(body.rows, 10);
+      const cols = parseInt(body.cols, 10);
+      const moves = parseInt(body.moves, 10);
+      const durationMs = parseInt(body.durationMs, 10);
+      if (!(rows > 0) || !(cols > 0) || !(moves >= 0) || !(durationMs >= 0)) {
+        sendJson(res, 400, { error: 'invalid fields' }); return;
+      }
+      const pack = String(body.pack || '').slice(0, 64);
+      const image = String(body.image || '').slice(0, 512);
+      if (!pack || !image) { sendJson(res, 400, { error: 'missing pack/image' }); return; }
+
+      const meta = getPackMetadata(pack);
+      const handicaps = body.handicaps && typeof body.handicaps === 'object' ? body.handicaps : {};
+      const score = computeScore({ rows, cols, moves, durationMs, packMult: meta.difficulty, handicaps });
+
+      const id = db.insertScore({
+        playerCode: code, pack, image, rows, cols, moves, durationMs,
+        handicaps, score,
+        clientStartedAt: body.clientStartedAt ? parseInt(body.clientStartedAt, 10) : null,
+      });
+      db.touchPlayer(code);
+
+      sendJson(res, 201, {
+        id,
+        score,
+        puzzleRank: db.puzzleRank(pack, image, rows, cols, score),
+        globalRank: db.globalRank(code),
+        personalBest: db.personalBest(code, pack, image, rows, cols),
+        packDifficulty: meta.difficulty,
+        packDifficultyLabel: meta.label,
+      });
+    } catch (e) {
+      sendJson(res, 400, { error: e.message });
+    }
+    return;
+  }
+
+  // GET /api/leaderboard/puzzle?pack=&image=&rows=&cols=
+  if (req.method === 'GET' && pathname === '/api/leaderboard/puzzle') {
+    const pack = url.searchParams.get('pack') || '';
+    const image = url.searchParams.get('image') || '';
+    const rows = parseInt(url.searchParams.get('rows') || '0', 10);
+    const cols = parseInt(url.searchParams.get('cols') || '0', 10);
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
+    if (!pack || !image || !rows || !cols) { sendJson(res, 400, { error: 'pack, image, rows, cols required' }); return; }
+    sendJson(res, 200, db.puzzleLeaderboard({ pack, image, rows, cols, limit }));
+    return;
+  }
+
+  // GET /api/leaderboard/global
+  if (req.method === 'GET' && pathname === '/api/leaderboard/global') {
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
+    sendJson(res, 200, db.globalLeaderboard({ limit }));
+    return;
+  }
+
+  // --- Admin routes ---
+
+  if (pathname.startsWith('/api/admin/')) {
+    if (!requireAdmin(req, res)) return;
+
+    if (req.method === 'GET' && pathname === '/api/admin/players') {
+      const search = url.searchParams.get('search') || '';
+      sendJson(res, 200, db.adminListPlayers(search));
+      return;
+    }
+
+    let m;
+    if (req.method === 'PATCH' && (m = pathname.match(/^\/api\/admin\/players\/([A-Z]{6})$/))) {
+      try {
+        const raw = await readBody(req);
+        const body = JSON.parse(raw || '{}');
+        const result = db.adminUpdatePlayer(m[1], body);
+        if (!result.ok) { sendJson(res, result.status, { error: result.error }); return; }
+        sendJson(res, 200, result.player);
+      } catch (e) { sendJson(res, 400, { error: e.message }); }
+      return;
+    }
+    if (req.method === 'DELETE' && (m = pathname.match(/^\/api\/admin\/players\/([A-Z]{6})$/))) {
+      const ok = db.deletePlayer(m[1]);
+      sendJson(res, ok ? 200 : 404, { ok });
+      return;
+    }
+    if (req.method === 'DELETE' && (m = pathname.match(/^\/api\/admin\/scores\/(\d+)$/))) {
+      const ok = db.deleteScoreById(parseInt(m[1], 10));
+      sendJson(res, ok ? 200 : 404, { ok });
+      return;
+    }
+    if (req.method === 'POST' && pathname === '/api/admin/recompute') {
+      loadPackMetadata(IMAGES_DIR);
+      const rows = db.allScoresForRecompute();
+      let updated = 0;
+      for (const r of rows) {
+        const newScore = scoreFor(r);
+        db.updateScoreValue(r.id, newScore);
+        updated++;
+      }
+      sendJson(res, 200, { updated });
+      return;
+    }
+    if (req.method === 'GET' && pathname === '/api/admin/packs') {
+      sendJson(res, 200, getAllPackMetadata());
+      return;
+    }
+
+    sendJson(res, 404, { error: 'admin route not found' });
+    return;
+  }
+
   // --- Static file serving ---
 
   let filePath = pathname === '/' ? '/index.html' : pathname;
@@ -231,8 +435,17 @@ const server = http.createServer(async (req, res) => {
 
   const fullPath = path.join(STATIC_DIR, filePath);
 
-  // Don't serve the bugs directory, server.js, or CLI script as static
-  if (fullPath.startsWith(BUGS_DIR) || path.basename(fullPath) === 'server.js' || path.basename(fullPath) === 'jigsaw-bugs') {
+  // Don't serve internal directories or scripts as static
+  const SERVER_MODULES_DIR = path.join(__dirname, 'server');
+  const base = path.basename(fullPath);
+  if (
+    fullPath.startsWith(BUGS_DIR) ||
+    fullPath.startsWith(DATA_DIR) ||
+    fullPath.startsWith(SERVER_MODULES_DIR) ||
+    base === 'server.js' ||
+    base === 'jigsaw-bugs' ||
+    base === 'jigsaw-scores'
+  ) {
     res.writeHead(404);
     res.end('Not found');
     return;
@@ -288,4 +501,5 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`Jigsaw API server listening on :${PORT}`);
   console.log(`Bug reports stored in ${BUGS_DIR}`);
+  console.log(`Leaderboard DB: ${path.join(DATA_DIR, 'jigsaw.db')}`);
 });
