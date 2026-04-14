@@ -275,6 +275,7 @@ createApp({
     }
 
     // --- Confirmation for leaving puzzle ---
+    // pendingAction: { message, confirmLabel, run } | null
     const pendingAction = ref(null);
 
     function confirmGoHome() {
@@ -286,9 +287,13 @@ createApp({
 
     function confirmNewPuzzle() {
       if (game.moveCount.value > 0 && !game.won.value) {
-        pendingAction.value = () => {
-          localStorage.removeItem('jigsaw_state');
-          navigateTo('picker');
+        pendingAction.value = {
+          message: 'Start a new puzzle? Your current progress will be discarded.',
+          confirmLabel: 'Discard & continue',
+          run: () => {
+            localStorage.removeItem('jigsaw_state');
+            navigateTo('picker');
+          },
         };
       } else {
         localStorage.removeItem('jigsaw_state');
@@ -299,7 +304,7 @@ createApp({
     function confirmYes() {
       const action = pendingAction.value;
       pendingAction.value = null;
-      if (action) action();
+      if (action && action.run) action.run();
     }
 
     // --- Mobile menu ---
@@ -327,6 +332,35 @@ createApp({
 
     // --- Identity ---
     const identity = ref(loadIdentity()); // { code, displayName } | null
+
+    // --- Player completion map ---
+    // bestByImage: `${pack}|${image}` -> highest stored score for this player,
+    // used to mark finished images on the picker grid. Refreshed whenever we
+    // have a known identity (boot, after win, after claim/signout).
+    const bestByImage = ref(new Map());
+
+    async function refreshPlayerCompletion() {
+      if (!identity.value) { bestByImage.value = new Map(); return; }
+      try {
+        const data = await fetchPlayerScores(identity.value.code, 500);
+        const map = new Map();
+        for (const s of (data.scores || [])) {
+          const key = `${s.pack}|${s.image}`;
+          const prev = map.get(key);
+          if (prev == null || s.score > prev) map.set(key, s.score);
+        }
+        bestByImage.value = map;
+      } catch (e) {
+        console.warn('completion fetch failed:', e);
+      }
+    }
+
+    function bestScoreFor(packName, image) {
+      const v = bestByImage.value.get(`${packName}|${image}`);
+      return v == null ? null : v;
+    }
+
+    watch(identity, () => refreshPlayerCompletion());
 
     // --- Win → submit score ---
     let submittingScore = false;
@@ -374,6 +408,7 @@ createApp({
       } finally {
         submittingScore = false;
       }
+      refreshPlayerCompletion();
     });
 
     // --- Leaderboard screen ---
@@ -454,8 +489,21 @@ createApp({
     function openSettings() {
       settingsNameInput.value = identity.value?.displayName || '';
       settingsClaimInput.value = '';
+      codeCopyStatus.value = '';
       setStatus('', '');
       navigateTo('settings');
+    }
+
+    const codeCopyStatus = ref('');
+    async function copyCode() {
+      if (!identity.value?.code) return;
+      try {
+        await navigator.clipboard.writeText(identity.value.code);
+        codeCopyStatus.value = 'Copied!';
+      } catch (e) {
+        codeCopyStatus.value = 'Copy failed';
+      }
+      setTimeout(() => { codeCopyStatus.value = ''; }, 1800);
     }
 
     async function saveDisplayName() {
@@ -587,6 +635,23 @@ createApp({
       adminLoad();
     }
 
+    function formatRelative(iso) {
+      if (!iso) return '';
+      const then = Date.parse(iso);
+      if (!Number.isFinite(then)) return '';
+      const diffSec = Math.max(0, Math.round((Date.now() - then) / 1000));
+      if (diffSec < 60) return 'just now';
+      const diffMin = Math.round(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHr = Math.round(diffMin / 60);
+      if (diffHr < 24) return `${diffHr}h ago`;
+      const diffDay = Math.round(diffHr / 24);
+      if (diffDay < 7) return `${diffDay}d ago`;
+      if (diffDay < 30) return `${Math.round(diffDay / 7)}w ago`;
+      if (diffDay < 365) return `${Math.round(diffDay / 30)}mo ago`;
+      return `${Math.round(diffDay / 365)}y ago`;
+    }
+
     function formatDuration(ms) {
       const s = Math.floor(ms / 1000);
       const m = Math.floor(s / 60);
@@ -614,6 +679,34 @@ createApp({
       return (p.thumbnails && p.thumbnails[image]) || image;
     }
 
+    // Does the current pack have an image after the one just finished?
+    const hasNextImage = computed(() => {
+      if (!currentPack.value) return false;
+      const imgs = currentPack.value.images || [];
+      const idx = imgs.indexOf(game.imgSrc.value);
+      return idx >= 0 && idx < imgs.length - 1;
+    });
+
+    async function replayCurrent() {
+      if (!game.imgSrc.value) return;
+      localStorage.removeItem('jigsaw_state');
+      await game.startGame(game.imgSrc.value, game.COLS.value);
+      updatePuzzleParam();
+      nextTick(game.computeScale);
+    }
+
+    async function playNextImage() {
+      if (!currentPack.value) return;
+      const imgs = currentPack.value.images || [];
+      const idx = imgs.indexOf(game.imgSrc.value);
+      const next = imgs[idx + 1];
+      if (!next) return;
+      localStorage.removeItem('jigsaw_state');
+      await game.startGame(next, game.COLS.value);
+      updatePuzzleParam();
+      nextTick(game.computeScale);
+    }
+
     async function playPuzzle(packName, image, cols) {
       const pack = packs.value.find(pp => pp.name === packName);
       if (!pack || !pack.images.includes(image)) return;
@@ -635,6 +728,7 @@ createApp({
       refreshResumable();
       // Drop stale identity if server no longer knows about it (e.g. DB was reset)
       identity.value = await validateIdentity();
+      refreshPlayerCompletion();
 
       // Determine which pack to use
       const urlPack = urlParams.get('pack');
@@ -729,14 +823,16 @@ createApp({
       // Settings screen
       settingsNameInput, settingsClaimInput, settingsStatus,
       saveDisplayName, claimCode, signOut,
+      codeCopyStatus, copyCode,
 
       // Admin
       adminToken, adminPlayers, adminStatus, adminSearch,
       saveAdminToken, adminLoad, adminRename, adminToggleLock, adminDelete, adminRecompute,
 
       // Helpers
-      formatDuration, packLabelFor, imageNameFor, imageThumbFor, playPuzzle,
-      fakeName, publicNameFor,
+      formatDuration, formatRelative, packLabelFor, imageNameFor, imageThumbFor, playPuzzle,
+      replayCurrent, playNextImage, hasNextImage,
+      fakeName, publicNameFor, bestScoreFor,
 
       // Setup screen stats
       puzzleSummary, summaryFor, openSetupLeaderboard,

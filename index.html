@@ -67,10 +67,16 @@
     <div class="image-grid">
       <button
         v-for="(img, i) in (currentPack ? currentPack.images : [])" :key="img"
-        class="image-card"
+        :class="['image-card', { 'image-card-done': bestScoreFor(currentPack.name, img) != null }]"
         @click="selectImageAndGo(img)"
       >
-        <img :src="thumb(currentPack, img)" :alt="'Image ' + (i + 1)" loading="lazy">
+        <div class="image-card-thumb">
+          <img :src="thumb(currentPack, img)" :alt="imageNameFor(currentPack.name, img)" loading="lazy">
+          <span v-if="bestScoreFor(currentPack.name, img) != null" class="image-card-best" :title="'Your best'">
+            {{ bestScoreFor(currentPack.name, img) }}
+          </span>
+        </div>
+        <div class="image-card-title">{{ imageNameFor(currentPack.name, img) }}</div>
       </button>
     </div>
   </div>
@@ -172,6 +178,9 @@
         <label class="settings-checkbox">
           <input type="checkbox" v-model="breakGroupsOption"> Break groups on drop
         </label>
+        <div class="settings-hint-inline">
+          When on, dropping a group in a crowded spot scatters the pieces it displaces instead of shifting them as a unit. Harder, but often faster.
+        </div>
         <hr class="settings-divider">
         <button class="settings-action" @click="reportBug(); settingsOpen = false" :disabled="bugStatus === 'sending'">Report Bug</button>
         <div v-if="bugStatus" class="settings-status">{{ bugStatus }}</div>
@@ -228,7 +237,8 @@
             <div class="victory-score-meta">Score not saved: {{ winResult.error }}</div>
           </div>
           <div class="victory-actions">
-            <button class="victory-btn-primary" @click="confirmNewPuzzle">New Puzzle</button>
+            <button class="victory-btn-primary" @click="playNextImage" :disabled="!hasNextImage">Next image &rarr;</button>
+            <button class="victory-btn-secondary" @click="replayCurrent">Replay</button>
             <button class="victory-btn-secondary" @click="openLeaderboardFromVictory">Leaderboard</button>
             <button class="victory-btn-secondary" @click="confirmGoHome">Home</button>
           </div>
@@ -244,12 +254,14 @@
       <h2>Leaderboard</h2>
     </header>
     <div class="lb-tabs">
-      <button :class="['lb-tab', { active: leaderboardTab === 'puzzle' }]"
-        :disabled="!leaderboardContext" @click="leaderboardTab = 'puzzle'">This Puzzle</button>
+      <button v-if="leaderboardContext"
+        :class="['lb-tab', { active: leaderboardTab === 'puzzle' }]"
+        @click="leaderboardTab = 'puzzle'">This Puzzle</button>
       <button :class="['lb-tab', { active: leaderboardTab === 'global' }]"
         @click="leaderboardTab = 'global'">Global</button>
-      <button :class="['lb-tab', { active: leaderboardTab === 'me' }]"
-        :disabled="!identity" @click="leaderboardTab = 'me'">My Scores</button>
+      <button v-if="identity"
+        :class="['lb-tab', { active: leaderboardTab === 'me' }]"
+        @click="leaderboardTab = 'me'">My Scores</button>
     </div>
     <div class="lb-body">
       <div v-if="leaderboardTab === 'puzzle' && leaderboardContext" class="lb-puzzle-header">
@@ -300,7 +312,7 @@
         <thead><tr><th>When</th><th>Puzzle</th><th>Size</th><th>Moves</th><th>Time</th><th>Score</th><th></th></tr></thead>
         <tbody>
           <tr v-for="s in myScores" :key="s.id">
-            <td>{{ new Date(s.created_at).toLocaleDateString() }}</td>
+            <td :title="new Date(s.created_at).toLocaleString()">{{ formatRelative(s.created_at) }}</td>
             <td>
               <a class="lb-link" href="#" @click.prevent="playPuzzle(s.pack, s.image, s.cols)">{{ imageNameFor(s.pack, s.image) }}</a>
               <div class="lb-sub">{{ packLabelFor(s.pack) }}</div>
@@ -324,28 +336,49 @@
       <h2>Profile</h2>
     </header>
     <div class="settings-body">
-      <div v-if="identity" class="settings-section">
-        <div class="settings-label">Your code</div>
-        <div class="settings-code">{{ identity.code }}</div>
-        <p class="settings-hint">Write this down. Enter it on another device to sync your scores.</p>
+      <!-- Hero: who am I? -->
+      <div class="settings-hero">
+        <div class="settings-hero-eyebrow">{{ identity ? 'Playing as' : 'You are' }}</div>
+        <div class="settings-hero-name">{{ identity ? publicNameFor(identity) : 'anonymous' }}</div>
+        <div v-if="identity" class="settings-hero-code">
+          <span>Code</span>
+          <code class="settings-code-inline" @click="copyCode" :title="codeCopyStatus || 'Click to copy'">{{ identity.code }}</code>
+          <span v-if="codeCopyStatus" class="settings-copy-flash">{{ codeCopyStatus }}</span>
+        </div>
+        <p v-if="identity" class="settings-hero-hint">Save this code — enter it on another device to sync your scores.</p>
+        <p v-else class="settings-hero-hint">Finish a puzzle or set a name below to claim a code.</p>
+      </div>
+
+      <!-- Primary action: set name -->
+      <div class="settings-section">
+        <label class="settings-label" for="settings-name">
+          {{ identity ? 'Display name' : 'Set a display name' }}
+          <span v-if="identity" class="settings-label-optional">(optional)</span>
+        </label>
+        <div class="settings-row">
+          <input id="settings-name" class="settings-input" v-model="settingsNameInput" maxlength="20" placeholder="Shown on leaderboards">
+          <button class="settings-btn settings-btn-primary" @click="saveDisplayName">
+            {{ identity ? 'Save' : 'Create & save' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Secondary: claim (collapsed until needed) -->
+      <details class="settings-details">
+        <summary class="settings-details-summary">I have a code from another device</summary>
+        <div class="settings-details-body">
+          <div class="settings-row">
+            <input class="settings-input settings-input-code" v-model="settingsClaimInput" maxlength="6"
+              placeholder="ABCDEF" @input="settingsClaimInput = settingsClaimInput.toUpperCase()">
+            <button class="settings-btn" @click="claimCode">Claim</button>
+          </div>
+          <p class="settings-hint">Scores on this device will merge into the claimed code.</p>
+        </div>
+      </details>
+
+      <!-- Sign out only when signed in -->
+      <div v-if="identity" class="settings-footer">
         <button class="settings-btn settings-btn-subtle" @click="signOut">Sign out on this device</button>
-      </div>
-      <div v-else class="settings-section">
-        <p class="settings-hint">You don't have a code yet. Enter a display name below to get one now, or it'll be generated automatically the first time you finish a puzzle.</p>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-label">{{ identity ? 'Display name (optional)' : 'Create account with a name' }}</div>
-        <input class="settings-input" v-model="settingsNameInput" maxlength="20" placeholder="Name shown on leaderboards">
-        <button class="settings-btn" @click="saveDisplayName">{{ identity ? 'Save name' : 'Create account' }}</button>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-label">I already have a code</div>
-        <input class="settings-input settings-input-code" v-model="settingsClaimInput" maxlength="6"
-          placeholder="ABCDEF" @input="settingsClaimInput = settingsClaimInput.toUpperCase()">
-        <button class="settings-btn" @click="claimCode">Claim code</button>
-        <p class="settings-hint">If this device already has scores under a different code, those will be merged into the claimed code.</p>
       </div>
 
       <div v-if="settingsStatus.message" :class="['settings-status-msg', 'settings-status-' + (settingsStatus.kind || 'info')]">{{ settingsStatus.message }}</div>
@@ -392,10 +425,10 @@
   <!-- ============ Confirmation modal ============ -->
   <div v-if="pendingAction" class="confirm-overlay" @click="pendingAction = null">
     <div class="confirm-dialog" @click.stop>
-      <p>Abandon current puzzle?</p>
+      <p>{{ pendingAction.message }}</p>
       <div class="confirm-buttons">
-        <button class="confirm-cancel" @click="pendingAction = null">Cancel</button>
-        <button class="confirm-yes" @click="confirmYes">Yes</button>
+        <button class="confirm-cancel" @click="pendingAction = null">Keep playing</button>
+        <button class="confirm-yes" @click="confirmYes">{{ pendingAction.confirmLabel }}</button>
       </div>
     </div>
   </div>

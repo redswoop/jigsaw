@@ -276,18 +276,55 @@ body::before {
   cursor: pointer;
   transition: all 0.2s ease;
   padding: 0;
-  aspect-ratio: 3 / 4;
+  display: flex;
+  flex-direction: column;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
 }
 .image-card:hover {
   border-color: rgba(196, 164, 90, 0.4);
   transform: scale(1.03);
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
+.image-card-thumb {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+}
 .image-card img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+.image-card-title {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.8rem;
+  color: #c4b08a;
+  padding: 8px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+.image-card-best {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #1a1510;
+  background: linear-gradient(135deg, #f5d27f, #c4a45a);
+  padding: 3px 8px;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.image-card-done {
+  border-color: rgba(196, 164, 90, 0.35);
 }
 
 /* ---- Setup Screen ---- */
@@ -704,6 +741,13 @@ body::before {
   border-top: 1px solid rgba(255,255,255,0.06);
   margin: 10px 0;
 }
+.settings-hint-inline {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #7a6d5a;
+  padding: 4px 2px 2px 26px;
+  max-width: 260px;
+}
 .settings-action {
   background: none;
   border: none;
@@ -944,21 +988,26 @@ body::before {
   border: none;
   transition: all 0.15s ease;
 }
-.confirm-buttons .confirm-yes {
+/* Cancel = safer default, rendered as the primary action so users
+   don't accidentally discard progress. Yes/confirm is destructive and
+   visually recedes. */
+.confirm-buttons .confirm-cancel {
   background: linear-gradient(135deg, #c4a45a, #a8893e);
   color: #1a1510;
-}
-.confirm-buttons .confirm-yes:hover {
-  background: linear-gradient(135deg, #d4b46a, #b8994e);
-}
-.confirm-buttons .confirm-cancel {
-  background: transparent;
-  color: #9a8d78;
-  border: 1.5px solid #4a3f32;
+  border: none;
 }
 .confirm-buttons .confirm-cancel:hover {
-  background: rgba(255,255,255,0.04);
-  color: #c4b08a;
+  background: linear-gradient(135deg, #d4b46a, #b8994e);
+}
+.confirm-buttons .confirm-yes {
+  background: transparent;
+  color: #b87a6a;
+  border: 1.5px solid rgba(184, 122, 106, 0.45);
+}
+.confirm-buttons .confirm-yes:hover {
+  background: rgba(184, 122, 106, 0.12);
+  color: #d49a8a;
+  border-color: rgba(212, 154, 138, 0.65);
 }
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -1247,14 +1296,136 @@ body::before {
 .settings-body {
   max-width: 520px;
   margin: 0 auto;
-  padding-top: 10px;
+  padding: 10px 24px 40px;
 }
-.settings-section {
+.settings-hero {
+  padding: 28px 0 24px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
   margin-bottom: 28px;
-  padding-bottom: 24px;
+}
+.settings-hero-eyebrow {
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #8a7d6a;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.settings-hero-name {
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 2.4rem;
+  font-weight: 300;
+  line-height: 1.1;
+  color: #e8ddc8;
+}
+.settings-hero-code {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 0.82rem;
+  color: #8a7d6a;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.settings-code-inline {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1.1rem;
+  letter-spacing: 0.3em;
+  color: #f5d27f;
+  background: rgba(245, 210, 127, 0.08);
+  border: 1px solid rgba(245, 210, 127, 0.3);
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-transform: none;
+}
+.settings-code-inline:hover {
+  background: rgba(245, 210, 127, 0.15);
+  border-color: rgba(245, 210, 127, 0.5);
+}
+.settings-copy-flash {
+  color: #f5d27f;
+  font-size: 0.75rem;
+  animation: fadeIn 0.2s ease;
+}
+.settings-hero-hint {
+  color: #8a7d6a;
+  font-size: 0.82rem;
+  margin-top: 16px;
+  line-height: 1.5;
+  max-width: 340px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.settings-section {
+  margin-bottom: 22px;
+  padding-bottom: 22px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
 }
-.settings-section:last-child { border-bottom: none; }
+.settings-section:last-of-type { border-bottom: none; }
+.settings-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.settings-row .settings-input { margin-bottom: 0; flex: 1; }
+.settings-row .settings-btn { flex-shrink: 0; }
+.settings-label-optional {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: #6f6554;
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.settings-details {
+  margin-bottom: 22px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.02);
+  overflow: hidden;
+}
+.settings-details-summary {
+  padding: 14px 16px;
+  cursor: pointer;
+  color: #a09577;
+  font-size: 0.88rem;
+  list-style: none;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+.settings-details-summary:hover { color: #e8ddc8; }
+.settings-details-summary::-webkit-details-marker { display: none; }
+.settings-details-summary::after {
+  content: '›';
+  float: right;
+  color: #6f6554;
+  transition: transform 0.2s ease;
+}
+.settings-details[open] .settings-details-summary::after {
+  transform: rotate(90deg);
+}
+.settings-details-body {
+  padding: 4px 16px 16px;
+}
+.settings-btn-primary {
+  background: linear-gradient(135deg, #c4a45a, #a8893e);
+  color: #1a1510;
+  border-color: transparent;
+}
+.settings-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #d4b46a, #b8994e);
+}
+.settings-footer {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+}
 .settings-label {
   font-size: 0.78rem;
   text-transform: uppercase;
