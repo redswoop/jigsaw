@@ -101,6 +101,92 @@ body::before {
   padding: 0 48px 48px;
 }
 
+.resume-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 0 48px 28px;
+  padding: 14px 18px 14px 14px;
+  background: linear-gradient(135deg, rgba(196, 164, 90, 0.12), rgba(196, 164, 90, 0.04));
+  border: 1px solid rgba(196, 164, 90, 0.35);
+  border-radius: 14px;
+  cursor: pointer;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.resume-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(245, 210, 127, 0.65);
+  background: linear-gradient(135deg, rgba(245, 210, 127, 0.16), rgba(196, 164, 90, 0.06));
+}
+.resume-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+}
+.resume-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.resume-eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #f5d27f;
+  font-weight: 600;
+}
+.resume-title {
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 500;
+  color: #e8ddc8;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.resume-meta {
+  font-size: 0.78rem;
+  color: #a09577;
+  font-variant-numeric: tabular-nums;
+}
+.resume-progress {
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.resume-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #c4a45a, #f5d27f);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.resume-arrow {
+  font-size: 1.4rem;
+  color: #c4a45a;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+@media (max-width: 768px) {
+  .resume-card {
+    margin: 0 20px 20px;
+    gap: 12px;
+    padding: 12px;
+  }
+  .resume-thumb { width: 60px; height: 60px; }
+  .resume-title { font-size: 1.15rem; }
+}
+
 .pack-card {
   background: #1a1510;
   border: 1px solid rgba(255,255,255,0.06);
@@ -517,6 +603,20 @@ body::before {
 .toolbar-btn-accent:hover {
   color: #e0c468;
   background: rgba(196, 164, 90, 0.12);
+}
+.toolbar-btn-new {
+  color: #e0c468;
+  background: rgba(196, 164, 90, 0.12);
+  border: 1px solid rgba(196, 164, 90, 0.35);
+  border-radius: 999px;
+  width: auto;
+  padding: 0 10px;
+  gap: 6px;
+}
+.toolbar-btn-new:hover {
+  color: #f5d27f;
+  background: rgba(245, 210, 127, 0.18);
+  border-color: rgba(245, 210, 127, 0.55);
 }
 .toolbar-btn-subtle {
   color: #7a6d5a;
@@ -983,6 +1083,19 @@ body::before {
   border-left: 1px solid rgba(255,255,255,0.08);
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.puzzle-progress {
+  height: 2px;
+  background: rgba(255,255,255,0.05);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.puzzle-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(196, 164, 90, 0.6), #f5d27f);
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 8px rgba(245, 210, 127, 0.4);
 }
 
 .victory-score {

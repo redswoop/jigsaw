@@ -24,6 +24,23 @@
         </button>
       </div>
     </header>
+    <button v-if="resumable" class="resume-card" @click="resumePuzzle">
+      <img class="resume-thumb" :src="resumable.thumb" :alt="resumable.name">
+      <div class="resume-info">
+        <div class="resume-eyebrow">Continue</div>
+        <div class="resume-title">{{ resumable.name || 'Puzzle in progress' }}</div>
+        <div class="resume-meta">
+          {{ resumable.pack.label }} &middot; {{ resumable.cols }}&times;{{ resumable.rows }} &middot;
+          {{ resumable.placed }}/{{ resumable.total }} placed
+        </div>
+        <div class="resume-progress">
+          <div class="resume-progress-fill"
+               :style="{ width: Math.round((resumable.placed / resumable.total) * 100) + '%' }"></div>
+        </div>
+      </div>
+      <span class="resume-arrow" aria-hidden="true">&rarr;</span>
+    </button>
+
     <div class="pack-gallery">
       <button
         v-for="pack in packs" :key="pack.name"
@@ -135,7 +152,7 @@
         </svg>
       </button>
       <div class="toolbar-divider"></div>
-      <button class="toolbar-btn toolbar-btn-accent" @click="confirmNewPuzzle" title="New Puzzle">
+      <button class="toolbar-btn toolbar-btn-new" @click="confirmNewPuzzle" title="New Puzzle">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="7" height="7"/>
           <rect x="14" y="3" width="7" height="7"/>
@@ -161,6 +178,10 @@
       </div>
     </div>
     <div v-if="settingsOpen" class="settings-backdrop" @click="settingsOpen = false"></div>
+
+    <div class="puzzle-progress" :title="placedCount + ' / ' + placedTotal + ' pieces placed'">
+      <div class="puzzle-progress-fill" :style="{ width: progressPct + '%' }"></div>
+    </div>
 
     <!-- Board -->
     <div id="board-wrap">

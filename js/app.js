@@ -29,43 +29,14 @@ createApp({
 
     function handlePopState(e) {
       if (suppressPopState) { suppressPopState = false; return; }
-      const target = e.state && e.state.screen;
-      if (target) {
-        // If leaving puzzle with in-progress game, confirm first
-        if (currentScreen.value === 'puzzle' && game.moveCount.value > 0 && !game.won.value) {
-          // Push state back so the URL doesn't change yet
-          suppressPopState = true;
-          history.pushState({ screen: 'puzzle' }, '', '');
-          pendingAction.value = () => {
-            localStorage.removeItem('jigsaw_state');
-            currentScreen.value = target;
-            clearUrlParams();
-          };
-          return;
-        }
-        if (currentScreen.value === 'puzzle') {
-          localStorage.removeItem('jigsaw_state');
-          clearUrlParams();
-        }
-        currentScreen.value = target;
-      } else {
-        // No state — go home
-        if (currentScreen.value === 'puzzle' && game.moveCount.value > 0 && !game.won.value) {
-          suppressPopState = true;
-          history.pushState({ screen: 'puzzle' }, '', '');
-          pendingAction.value = () => {
-            localStorage.removeItem('jigsaw_state');
-            currentScreen.value = 'home';
-            clearUrlParams();
-          };
-          return;
-        }
-        if (currentScreen.value === 'puzzle') {
-          localStorage.removeItem('jigsaw_state');
-          clearUrlParams();
-        }
-        currentScreen.value = 'home';
+      const target = (e.state && e.state.screen) || 'home';
+      // Leaving a puzzle preserves saved state so it can be resumed from home.
+      // Only clear on completion (nothing left to resume).
+      if (currentScreen.value === 'puzzle') {
+        if (game.won.value) localStorage.removeItem('jigsaw_state');
+        clearUrlParams();
       }
+      currentScreen.value = target;
     }
 
     // --- Pack state ---
@@ -238,6 +209,64 @@ createApp({
       return `${m}:${String(r).padStart(2, '0')}`;
     });
 
+    const placedTotal = computed(() => game.tiles.length);
+    const progressPct = computed(() => {
+      const t = placedTotal.value;
+      return t ? Math.round((game.placedCount.value / t) * 100) : 0;
+    });
+
+    // --- Resume / Continue ---
+    // Snapshot of any unfinished puzzle in localStorage, surfaced on the home
+    // screen so returning players can jump back in without re-navigating.
+    const resumable = ref(null);
+
+    function refreshResumable() {
+      try {
+        const raw = localStorage.getItem('jigsaw_state');
+        if (!raw) { resumable.value = null; return; }
+        const s = JSON.parse(raw);
+        if (!s || !s.img || !s.grid || !s.rows || !s.cols) { resumable.value = null; return; }
+        // Find which pack this image belongs to
+        const pack = packs.value.find(p => p.images.includes(s.img));
+        if (!pack) { resumable.value = null; return; }
+        // Skip if the puzzle is already solved (all tiles in true position)
+        const total = s.rows * s.cols;
+        const solved = Array.isArray(s.grid) && s.grid.length === total
+          && s.grid.every((tid, idx) => tid === idx);
+        if (solved) { resumable.value = null; return; }
+        // Count tiles currently in their correct position
+        let placed = 0;
+        for (let i = 0; i < total; i++) if (s.grid[i] === i) placed++;
+        resumable.value = {
+          pack, image: s.img, rows: s.rows, cols: s.cols,
+          moves: s.moveCount || 0, placed, total,
+          name: pack.names?.[s.img] || '',
+          thumb: pack.thumbnails?.[s.img] || s.img,
+        };
+      } catch (e) {
+        resumable.value = null;
+      }
+    }
+
+    async function resumePuzzle() {
+      const r = resumable.value;
+      if (!r) return;
+      selectPack(r.pack.name);
+      selectedImage.value = r.image;
+      await game.loadImageDimensions(r.image);
+      if (game.restoreState()) {
+        navigateTo('puzzle');
+        updatePuzzleParam();
+        nextTick(game.computeScale);
+      }
+    }
+
+    // Refresh resumable whenever we land on home (puzzle may have been
+    // abandoned or completed since last visit).
+    watch(currentScreen, (s) => {
+      if (s === 'home') refreshResumable();
+    });
+
     async function startPuzzle(cols) {
       await game.startGame(selectedImage.value, cols);
       navigateTo('puzzle');
@@ -249,15 +278,10 @@ createApp({
     const pendingAction = ref(null);
 
     function confirmGoHome() {
-      if (game.moveCount.value > 0 && !game.won.value) {
-        pendingAction.value = () => {
-          localStorage.removeItem('jigsaw_state');
-          goHome();
-        };
-      } else {
-        localStorage.removeItem('jigsaw_state');
-        goHome();
-      }
+      // Preserve the saved puzzle so the home screen can offer a Resume card.
+      // Only clear state when the puzzle has been won (nothing to resume).
+      if (game.won.value) localStorage.removeItem('jigsaw_state');
+      goHome();
     }
 
     function confirmNewPuzzle() {
@@ -608,6 +632,7 @@ createApp({
       history.replaceState({ screen: 'home' }, '', '');
 
       await loadPacks();
+      refreshResumable();
       // Drop stale identity if server no longer knows about it (e.g. DB was reset)
       identity.value = await validateIdentity();
 
@@ -639,7 +664,11 @@ createApp({
 
       const images = currentPack.value ? currentPack.value.images : [];
 
-      if (savedImg && images.includes(savedImg)) {
+      // Only auto-restore to the puzzle screen when the URL carries puzzle
+      // params (deep-link or a still-open puzzle tab). A bare "/" load lands
+      // on home with the Resume card — clicking Home shouldn't be undone by
+      // a reload.
+      if (savedImg && images.includes(savedImg) && urlPuzzle && urlCols) {
         await game.loadImageDimensions(savedImg);
         if (game.restoreState()) {
           currentScreen.value = 'puzzle';
@@ -714,7 +743,10 @@ createApp({
       selectedImageName, openImageLeaderboard,
 
       // Puzzle toolbar
-      liveTimeLabel,
+      liveTimeLabel, progressPct, placedTotal,
+
+      // Resume
+      resumable, resumePuzzle,
 
       // Confirmation modal
       pendingAction, confirmYes,
@@ -751,6 +783,7 @@ createApp({
       liveSeconds: game.liveSeconds,
       winResult: game.winResult,
       bugStatus: game.bugStatus,
+      placedCount: game.placedCount,
       tileStyle: game.tileStyle,
       tileClasses: game.tileClasses,
       onPointerDown: game.onPointerDown,

@@ -67,6 +67,16 @@ export function createGameEngine() {
     if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
   }
 
+  // Number of tiles currently in their final correct position.
+  const placedCount = computed(() => {
+    let n = 0;
+    for (const t of tiles) {
+      const pos = tilePos.get(t.id);
+      if (pos && pos.row === t.trueRow && pos.col === t.trueCol) n++;
+    }
+    return n;
+  });
+
   const currentScore = computed(() => {
     if (moveCount.value === 0) return null;
     const durationMs = liveSeconds.value * 1000;
@@ -940,6 +950,7 @@ export function createGameEngine() {
 
     // Scoring
     packMult, liveSeconds, currentScore, winResult, scoreSubmitted,
+    placedCount,
 
     // Methods
     startGame, initGame, undo, computeScale, computeGridSize,
