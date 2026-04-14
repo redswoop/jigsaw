@@ -213,6 +213,37 @@ export function personalBest(playerCode, pack, image, rows, cols) {
   return row ? row.best : null;
 }
 
+export function puzzleVariants(pack, image) {
+  // Per (rows, cols): plays count + the top-scoring row (with that player's name).
+  return db.prepare(`
+    WITH ranked AS (
+      SELECT s.rows, s.cols, s.score, s.player_code,
+             p.display_name,
+             ROW_NUMBER() OVER (PARTITION BY s.rows, s.cols ORDER BY s.score DESC, s.duration_ms ASC) AS rn,
+             COUNT(*) OVER (PARTITION BY s.rows, s.cols) AS plays
+      FROM scores s
+      JOIN players p ON p.code = s.player_code
+      WHERE s.pack = ? AND s.image = ?
+    )
+    SELECT rows, cols, plays, score, player_code, display_name
+    FROM ranked WHERE rn = 1
+    ORDER BY cols ASC, rows ASC
+  `).all(pack, image);
+}
+
+export function playerBestsForPuzzle(playerCode, pack, image) {
+  return db.prepare(`
+    SELECT rows, cols,
+           MAX(score) AS best_score,
+           MIN(moves) AS best_moves,
+           MIN(duration_ms) AS best_duration_ms,
+           COUNT(*) AS plays
+    FROM scores
+    WHERE player_code = ? AND pack = ? AND image = ?
+    GROUP BY rows, cols
+  `).all(playerCode, pack, image);
+}
+
 export function deleteScoreById(id) {
   const info = db.prepare('DELETE FROM scores WHERE id = ?').run(id);
   return info.changes > 0;

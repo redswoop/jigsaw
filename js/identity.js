@@ -63,3 +63,18 @@ export async function ensurePlayer() {
   if (existing) return existing;
   return createPlayer();
 }
+
+// Ping the server to check our stored code still exists. If not, drop it locally
+// so UI doesn't spam 404s. Returns the (possibly cleared) identity.
+export async function validateIdentity() {
+  const existing = loadIdentity();
+  if (!existing) return null;
+  try {
+    const res = await fetch(`/api/players/${existing.code}/scores?limit=1`);
+    if (res.status === 404) { clearIdentity(); return null; }
+    if (!res.ok) return existing; // network / server hiccup — don't clobber
+    return existing;
+  } catch {
+    return existing;
+  }
+}

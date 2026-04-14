@@ -2,11 +2,12 @@
 import { createGameEngine } from './game.js';
 import { soundOn, toggleSound } from './sounds.js';
 import {
-  loadIdentity, ensurePlayer, claimPlayer, setDisplayName, clearIdentity,
+  loadIdentity, ensurePlayer, claimPlayer, setDisplayName, clearIdentity, createPlayer, validateIdentity,
 } from './identity.js';
 import {
-  submitScore, fetchPuzzleLeaderboard, fetchGlobalLeaderboard, fetchPlayerScores,
+  submitScore, fetchPuzzleLeaderboard, fetchGlobalLeaderboard, fetchPlayerScores, fetchPuzzleSummary,
 } from './leaderboard.js';
+import { fakeName, publicNameFor } from './fakename.js';
 
 const { createApp, ref, computed, onMounted, onUnmounted, nextTick, watch } = Vue;
 
@@ -148,15 +149,59 @@ createApp({
         selectedImageDims.value = { w: imgEl.naturalWidth, h: imgEl.naturalHeight };
       };
       imgEl.src = img;
+      loadPuzzleSummary(currentPack.value?.name, img);
       navigateTo('setup');
+    }
+
+    // Compute rows for a given column count using image dimensions
+    function rowsForCols(cols) {
+      if (!selectedImageDims.value) return null;
+      const aspect = selectedImageDims.value.h / selectedImageDims.value.w;
+      return Math.max(Math.round(cols * aspect), 2);
     }
 
     // Compute piece count for a given column count using image dimensions
     function pieceCountForCols(cols) {
-      if (!selectedImageDims.value) return '...';
-      const aspect = selectedImageDims.value.h / selectedImageDims.value.w;
-      const rows = Math.max(Math.round(cols * aspect), 2);
-      return cols * rows;
+      const rows = rowsForCols(cols);
+      return rows == null ? '...' : cols * rows;
+    }
+
+    // --- Puzzle summary (setup screen stats) ---
+    const puzzleSummary = ref(null); // { variants: [...], mine: [...] } | null
+
+    async function loadPuzzleSummary(packName, image) {
+      puzzleSummary.value = null;
+      if (!packName || !image) return;
+      try {
+        const data = await fetchPuzzleSummary({
+          pack: packName, image,
+          code: identity.value?.code,
+        });
+        // Ignore if user already moved on to another image
+        if (selectedImage.value === image) puzzleSummary.value = data;
+      } catch (e) {
+        console.warn('puzzle summary fetch failed:', e);
+      }
+    }
+
+    function summaryFor(cols) {
+      if (!puzzleSummary.value) return null;
+      const rows = rowsForCols(cols);
+      if (rows == null) return null;
+      const top = puzzleSummary.value.variants.find(v => v.cols === cols && v.rows === rows);
+      const mine = puzzleSummary.value.mine.find(m => m.cols === cols && m.rows === rows);
+      if (!top && !mine) return null;
+      return { top: top?.top || null, plays: top?.plays || 0, mine: mine || null };
+    }
+
+    function openSetupLeaderboard(cols) {
+      const rows = rowsForCols(cols);
+      if (rows == null || !currentPack.value) return;
+      openLeaderboard({
+        pack: currentPack.value.name,
+        image: selectedImage.value,
+        rows, cols,
+      });
     }
 
     async function startPuzzle(cols) {
@@ -227,25 +272,41 @@ createApp({
 
     // --- Win → submit score ---
     let submittingScore = false;
+    async function submitScoreFor(player) {
+      const snap = game.getCompletionSnapshot();
+      return submitScore({
+        code: player.code,
+        pack: currentPack.value ? currentPack.value.name : '',
+        image: snap.image,
+        rows: snap.rows,
+        cols: snap.cols,
+        moves: snap.moves,
+        durationMs: snap.durationMs,
+        clientStartedAt: snap.clientStartedAt,
+        handicaps: {},
+      });
+    }
     watch(() => game.won.value, async (isWon) => {
       if (!isWon || submittingScore) return;
       submittingScore = true;
       try {
-        const player = identity.value || await ensurePlayer();
+        let player = identity.value || await ensurePlayer();
         identity.value = player;
-        const snap = game.getCompletionSnapshot();
-        const result = await submitScore({
-          code: player.code,
-          pack: currentPack.value ? currentPack.value.name : '',
-          image: snap.image,
-          rows: snap.rows,
-          cols: snap.cols,
-          moves: snap.moves,
-          durationMs: snap.durationMs,
-          clientStartedAt: snap.clientStartedAt,
-          handicaps: {},
-        });
-        game.winResult.value = result;
+        try {
+          game.winResult.value = await submitScoreFor(player);
+        } catch (e) {
+          // Server says our stored code isn't in its DB (e.g. DB was reset).
+          // Mint a fresh code transparently and retry once.
+          if (/unknown code/i.test(e.message || '')) {
+            console.warn(`score submit rejected for ${player.code} — reissuing code`);
+            clearIdentity();
+            player = await createPlayer();
+            identity.value = player;
+            game.winResult.value = await submitScoreFor(player);
+          } else {
+            throw e;
+          }
+        }
       } catch (e) {
         console.warn('score submit failed:', e);
         game.winResult.value = { error: e.message || String(e) };
@@ -262,8 +323,10 @@ createApp({
     const myScores = ref([]);
     const leaderboardContext = ref(null); // { pack, image, rows, cols } snapshot for 'puzzle' tab
 
+    const leaderboardError = ref('');
     async function refreshLeaderboard() {
       leaderboardLoading.value = true;
+      leaderboardError.value = '';
       try {
         if (leaderboardTab.value === 'puzzle' && leaderboardContext.value) {
           const ctx = leaderboardContext.value;
@@ -276,6 +339,10 @@ createApp({
         }
       } catch (e) {
         console.warn('leaderboard fetch failed:', e);
+        leaderboardError.value = friendlyError(e, {
+          'not found': 'Your code is not recognized — try signing out and playing again.',
+          default: 'Could not load leaderboard. Check your connection and try again.',
+        });
       } finally {
         leaderboardLoading.value = false;
       }
@@ -307,32 +374,62 @@ createApp({
     // --- Settings screen ---
     const settingsNameInput = ref('');
     const settingsClaimInput = ref('');
-    const settingsStatus = ref('');
+    const settingsStatus = ref({ kind: '', message: '' }); // kind: 'error' | 'success' | ''
+
+    function setStatus(kind, message) {
+      settingsStatus.value = { kind, message };
+    }
+
+    // Map known server errors to human-friendly messages. Pass a `map` of
+    // lowercase-substring → replacement, and a `default` fallback.
+    function friendlyError(e, map) {
+      const raw = String(e?.message || e || '').toLowerCase();
+      for (const key of Object.keys(map)) {
+        if (key !== 'default' && raw.includes(key.toLowerCase())) return map[key];
+      }
+      return map.default || String(e?.message || e || 'Something went wrong');
+    }
 
     function openSettings() {
       settingsNameInput.value = identity.value?.displayName || '';
       settingsClaimInput.value = '';
-      settingsStatus.value = '';
+      setStatus('', '');
       navigateTo('settings');
     }
 
     async function saveDisplayName() {
-      settingsStatus.value = '';
+      setStatus('', '');
       try {
         if (!identity.value) identity.value = await ensurePlayer();
         const updated = await setDisplayName(identity.value.code, settingsNameInput.value.trim());
         identity.value = updated;
-        settingsStatus.value = 'Saved';
+        setStatus('success', 'Name saved.');
       } catch (e) {
-        settingsStatus.value = e.message || 'Failed';
+        setStatus('error', friendlyError(e, {
+          'name locked':    'This name is locked by an admin and can\'t be changed. Get in touch if that\'s a mistake.',
+          'invalid name':   'Name is invalid. Keep it under 20 characters and avoid weird control chars.',
+          'not found':      'Your code is not recognized by the server. Try signing out and playing again.',
+          default:          'Could not save name. Try again in a moment.',
+        }));
       }
     }
 
+    function signOut() {
+      if (!identity.value) return;
+      const code = identity.value.code;
+      if (!confirm(`Forget ${code} on this device? Your scores stay on the server; you can claim the code back anytime.`)) return;
+      clearIdentity();
+      identity.value = null;
+      settingsNameInput.value = '';
+      settingsClaimInput.value = '';
+      setStatus('success', `Signed out of ${code}.`);
+    }
+
     async function claimCode() {
-      settingsStatus.value = '';
+      setStatus('', '');
       const raw = settingsClaimInput.value.trim().toUpperCase();
       if (!/^[A-Z]{6}$/.test(raw)) {
-        settingsStatus.value = 'Code must be 6 letters';
+        setStatus('error', 'Codes are 6 letters (A–Z).');
         return;
       }
       try {
@@ -341,9 +438,15 @@ createApp({
         identity.value = player;
         settingsNameInput.value = player.displayName || '';
         settingsClaimInput.value = '';
-        settingsStatus.value = mergeFrom && mergeFrom !== raw ? `Claimed & merged from ${mergeFrom}` : 'Claimed';
+        setStatus('success', mergeFrom && mergeFrom !== raw
+          ? `Claimed ${raw} and merged scores from ${mergeFrom}.`
+          : `Claimed ${raw}.`);
       } catch (e) {
-        settingsStatus.value = e.message || 'Failed';
+        setStatus('error', friendlyError(e, {
+          'not found':   `No player with code ${raw}. Codes are issued by the server the first time you finish a puzzle — you can't invent one.`,
+          'invalid code': 'That doesn\'t look like a valid code. Codes are 6 letters.',
+          default:       'Could not claim that code. Check it and try again.',
+        }));
       }
     }
 
@@ -435,12 +538,41 @@ createApp({
       return p ? p.label : packName;
     }
 
+    function imageNameFor(packName, image) {
+      const p = packs.value.find(pp => pp.name === packName);
+      if (!p) return image;
+      if (p.names && p.names[image]) return p.names[image];
+      // Fallback: strip path + extension, humanize
+      const base = image.split('/').pop().replace(/\.[^.]+$/, '');
+      return base.replace(/_/g, ' ');
+    }
+
+    function imageThumbFor(packName, image) {
+      const p = packs.value.find(pp => pp.name === packName);
+      if (!p) return image;
+      return (p.thumbnails && p.thumbnails[image]) || image;
+    }
+
+    async function playPuzzle(packName, image, cols) {
+      const pack = packs.value.find(pp => pp.name === packName);
+      if (!pack || !pack.images.includes(image)) return;
+      selectPack(packName);
+      selectedImage.value = image;
+      localStorage.removeItem('jigsaw_state');
+      await game.startGame(image, cols);
+      navigateTo('puzzle');
+      updatePuzzleParam();
+      nextTick(game.computeScale);
+    }
+
     // --- Init ---
     onMounted(async () => {
       // Set initial history state
       history.replaceState({ screen: 'home' }, '', '');
 
       await loadPacks();
+      // Drop stale identity if server no longer knows about it (e.g. DB was reset)
+      identity.value = await validateIdentity();
 
       // Determine which pack to use
       const urlPack = urlParams.get('pack');
@@ -525,19 +657,23 @@ createApp({
       identity,
 
       // Leaderboard
-      leaderboardTab, leaderboardLoading, leaderboardContext,
+      leaderboardTab, leaderboardLoading, leaderboardError, leaderboardContext,
       puzzleBoard, globalBoard, myScores, refreshLeaderboard,
 
       // Settings screen
       settingsNameInput, settingsClaimInput, settingsStatus,
-      saveDisplayName, claimCode,
+      saveDisplayName, claimCode, signOut,
 
       // Admin
       adminToken, adminPlayers, adminStatus, adminSearch,
       saveAdminToken, adminLoad, adminRename, adminToggleLock, adminDelete, adminRecompute,
 
       // Helpers
-      formatDuration, packLabelFor,
+      formatDuration, packLabelFor, imageNameFor, imageThumbFor, playPuzzle,
+      fakeName, publicNameFor,
+
+      // Setup screen stats
+      puzzleSummary, summaryFor, openSetupLeaderboard,
 
       // Confirmation modal
       pendingAction, confirmYes,

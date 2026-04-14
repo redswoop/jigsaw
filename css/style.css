@@ -261,22 +261,75 @@ body::before {
   min-width: 220px;
 }
 
+.difficulty-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.difficulty-row .difficulty-btn { flex: 1; min-width: 0; }
+
 .difficulty-btn {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 14px 20px;
   background: rgba(255,255,255,0.03);
   border: 1.5px solid rgba(255,255,255,0.08);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: 'DM Sans', system-ui, sans-serif;
+  text-align: left;
 }
 .difficulty-btn:hover {
   background: rgba(196, 164, 90, 0.08);
   border-color: rgba(196, 164, 90, 0.3);
   transform: translateX(4px);
+}
+.difficulty-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.difficulty-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: #8a7d6a;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+.difficulty-stat b {
+  color: #d4c5a8;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.difficulty-mine b { color: #f5d27f; }
+.difficulty-top-by {
+  opacity: 0.75;
+  margin-left: 4px;
+}
+
+.difficulty-trophy {
+  flex-shrink: 0;
+  width: 42px;
+  background: rgba(255,255,255,0.03);
+  border: 1.5px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: #d4c5a8;
+  transition: all 0.2s ease;
+  padding: 0;
+  line-height: 1;
+}
+.difficulty-trophy:hover {
+  background: rgba(245, 210, 127, 0.12);
+  border-color: rgba(245, 210, 127, 0.35);
 }
 
 .difficulty-label {
@@ -892,6 +945,10 @@ body::before {
   max-width: 900px;
   margin: 0 auto;
   padding: 0 20px 60px;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .lb-tabs {
@@ -924,9 +981,12 @@ body::before {
 
 .lb-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   color: #e8ddc8;
   font-size: 0.9rem;
+  table-layout: auto;
+  word-break: break-word;
 }
 .lb-table th, .lb-table td {
   text-align: left;
@@ -942,6 +1002,60 @@ body::before {
 }
 .lb-table tbody tr:hover { background: rgba(255,255,255,0.03); }
 .lb-me { background: rgba(245, 210, 127, 0.08); }
+
+.lb-puzzle-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+}
+.lb-puzzle-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.lb-puzzle-meta { flex: 1; min-width: 0; }
+.lb-puzzle-name {
+  font-size: 1rem;
+  color: #e8ddc8;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lb-puzzle-sub {
+  font-size: 0.78rem;
+  color: #8a7d6a;
+  margin-top: 2px;
+}
+
+.lb-link {
+  color: #e8ddc8;
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(245, 210, 127, 0.4);
+}
+.lb-link:hover { color: #f5d27f; border-bottom-color: #f5d27f; }
+.lb-sub { font-size: 0.75rem; color: #8a7d6a; margin-top: 2px; }
+
+.lb-play-btn {
+  background: rgba(245, 210, 127, 0.12);
+  border: 1px solid rgba(245, 210, 127, 0.3);
+  color: #f5d27f;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 0;
+  line-height: 1;
+}
+.lb-play-btn:hover { background: rgba(245, 210, 127, 0.22); }
 
 .settings-body {
   max-width: 520px;
@@ -1005,12 +1119,58 @@ body::before {
 }
 .settings-btn:hover:not(:disabled) { background: rgba(245, 210, 127, 0.25); }
 .settings-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.settings-btn-subtle {
+  background: transparent;
+  border-color: rgba(255,255,255,0.15);
+  color: #8a7d6a;
+  margin-top: 12px;
+}
+.settings-btn-subtle:hover { background: rgba(255,255,255,0.06); color: #e8ddc8; }
 .settings-status-msg {
   color: #8a7d6a;
   font-size: 0.85rem;
   margin-top: 10px;
+  padding: 10px 14px;
   text-align: center;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  line-height: 1.45;
 }
+.settings-status-success {
+  color: #c9d9b0;
+  background: rgba(120, 170, 80, 0.08);
+  border-color: rgba(120, 170, 80, 0.25);
+}
+.settings-status-error {
+  color: #ffc2b8;
+  background: rgba(255, 100, 80, 0.08);
+  border-color: rgba(255, 100, 80, 0.3);
+}
+
+.lb-error {
+  text-align: center;
+  padding: 28px 20px;
+  color: #ffc2b8;
+  background: rgba(255, 100, 80, 0.06);
+  border: 1px solid rgba(255, 100, 80, 0.25);
+  border-radius: 10px;
+  line-height: 1.5;
+}
+.lb-retry {
+  display: inline-block;
+  margin-top: 12px;
+  margin-left: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #e8ddc8;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.lb-retry:hover { background: rgba(255,255,255,0.12); }
 
 .admin-body { padding-top: 10px; }
 .admin-controls {
@@ -1037,8 +1197,28 @@ body::before {
 .admin-actions .admin-danger { color: #ff8a7a; border-color: rgba(255, 138, 122, 0.3); }
 
 @media (max-width: 600px) {
+  .screen-leaderboard, .screen-settings, .screen-admin {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
   .lb-table { font-size: 0.82rem; }
-  .lb-table th, .lb-table td { padding: 8px 6px; }
+  .lb-table th, .lb-table td { padding: 8px 4px; }
+  /* Play column redundant on mobile — the puzzle name link triggers play.
+     Scope to leaderboard so the admin Actions column stays visible. */
+  .screen-leaderboard .lb-table th:last-child:empty,
+  .screen-leaderboard .lb-table td:has(.lb-play-btn) { display: none; }
+  /* Wrap the puzzle-context header on narrow screens */
+  .lb-puzzle-header { flex-wrap: wrap; gap: 10px; padding: 10px; }
+  .lb-puzzle-header .settings-btn { flex: 1 1 100%; }
   .admin-controls { flex-direction: column; align-items: stretch; }
   .admin-controls .settings-input { flex: none; }
+  .admin-body { overflow-x: auto; }
+  .lb-tabs { overflow-x: auto; }
+  .lb-tab { white-space: nowrap; padding: 10px 12px; }
+}
+
+/* Very narrow — drop the least important columns */
+@media (max-width: 420px) {
+  .lb-puzzle-thumb { width: 44px; height: 44px; }
+  .lb-puzzle-name { font-size: 0.9rem; }
 }

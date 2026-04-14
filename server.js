@@ -1,5 +1,6 @@
 import http from 'http';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
@@ -12,7 +13,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = parseInt(process.env.PORT ?? '3002', 10);
 const BUGS_DIR = process.env.BUGS_DIR || path.join(__dirname, '.bugs');
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '.data');
+// DB location defaults outside Dropbox: SQLite WAL + Dropbox sync races cause
+// SQLITE_IOERR_VNODE crashes. Override with DATA_DIR env if running in Docker / on the NAS.
+const DATA_DIR = process.env.DATA_DIR || path.join(os.homedir(), '.jigsaw', 'data');
 const STATIC_DIR = __dirname;
 const IMAGES_DIR = path.join(__dirname, 'images');
 
@@ -72,7 +75,19 @@ function readBody(req) {
   });
 }
 
-const server = http.createServer(async (req, res) => {
+const server = http.createServer((req, res) => {
+  handleRequest(req, res).catch(err => {
+    console.error(`[${req.method} ${req.url}]`, err);
+    if (!res.headersSent) {
+      try { sendJson(res, 500, { error: err.message || 'internal error' }); }
+      catch { try { res.end(); } catch {} }
+    } else {
+      try { res.end(); } catch {}
+    }
+  });
+});
+
+async function handleRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const pathname = url.pathname;
 
@@ -369,6 +384,27 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // GET /api/puzzle-summary — per-variant record + optionally the caller's bests
+  if (req.method === 'GET' && pathname === '/api/puzzle-summary') {
+    const pack = url.searchParams.get('pack');
+    const image = url.searchParams.get('image');
+    const code = url.searchParams.get('code');
+    if (!pack || !image) { sendJson(res, 400, { error: 'pack, image required' }); return; }
+    const variants = db.puzzleVariants(pack, image).map(r => ({
+      rows: r.rows, cols: r.cols, plays: r.plays,
+      top: { score: r.score, playerCode: r.player_code, displayName: r.display_name },
+    }));
+    const mine = (code && /^[A-Z]{6}$/.test(code) && db.getPlayer(code))
+      ? db.playerBestsForPuzzle(code, pack, image).map(r => ({
+          rows: r.rows, cols: r.cols,
+          bestScore: r.best_score, bestMoves: r.best_moves,
+          bestDurationMs: r.best_duration_ms, plays: r.plays,
+        }))
+      : [];
+    sendJson(res, 200, { variants, mine });
+    return;
+  }
+
   // --- Admin routes ---
 
   if (pathname.startsWith('/api/admin/')) {
@@ -496,7 +532,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404);
     res.end('Not found');
   }
-});
+}
 
 server.listen(PORT, () => {
   console.log(`Jigsaw API server listening on :${PORT}`);

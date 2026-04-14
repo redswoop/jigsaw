@@ -20,7 +20,7 @@
       <div class="home-nav">
         <button class="home-nav-btn" @click="openLeaderboard()">Leaderboard</button>
         <button class="home-nav-btn" @click="openSettings()">
-          {{ identity ? (identity.displayName || identity.code) : 'Sign in' }}
+          {{ identity ? publicNameFor(identity) : 'Sign in' }}
         </button>
       </div>
     </header>
@@ -69,22 +69,27 @@
         <img :src="selectedImage" alt="Selected puzzle">
       </div>
       <div class="difficulty-options">
-        <button class="difficulty-btn" @click="startPuzzle(2)">
-          <span class="difficulty-label">Kids</span>
-          <span class="difficulty-pieces">{{ pieceCountForCols(2) }} pieces</span>
-        </button>
-        <button class="difficulty-btn" @click="startPuzzle(4)">
-          <span class="difficulty-label">Easy</span>
-          <span class="difficulty-pieces">{{ pieceCountForCols(4) }} pieces</span>
-        </button>
-        <button class="difficulty-btn" @click="startPuzzle(6)">
-          <span class="difficulty-label">Medium</span>
-          <span class="difficulty-pieces">{{ pieceCountForCols(6) }} pieces</span>
-        </button>
-        <button class="difficulty-btn" @click="startPuzzle(8)">
-          <span class="difficulty-label">Hard</span>
-          <span class="difficulty-pieces">{{ pieceCountForCols(8) }} pieces</span>
-        </button>
+        <div v-for="d in [{cols:2,label:'Kids'},{cols:4,label:'Easy'},{cols:6,label:'Medium'},{cols:8,label:'Hard'}]" :key="d.cols" class="difficulty-row">
+          <button class="difficulty-btn" @click="startPuzzle(d.cols)">
+            <span class="difficulty-main">
+              <span class="difficulty-label">{{ d.label }}</span>
+              <span class="difficulty-pieces">{{ pieceCountForCols(d.cols) }} pieces</span>
+            </span>
+            <span v-if="summaryFor(d.cols)" class="difficulty-stats">
+              <span v-if="summaryFor(d.cols).mine" class="difficulty-stat difficulty-mine">
+                Your best: <b>{{ summaryFor(d.cols).mine.bestScore }}</b>
+              </span>
+              <span v-if="summaryFor(d.cols).top" class="difficulty-stat difficulty-top">
+                Record: <b>{{ summaryFor(d.cols).top.score }}</b>
+                <span class="difficulty-top-by">by {{ publicNameFor(summaryFor(d.cols).top) }}</span>
+              </span>
+            </span>
+          </button>
+          <button class="difficulty-trophy"
+                  @click="openSetupLeaderboard(d.cols)"
+                  :title="'Leaderboard for ' + d.label"
+                  aria-label="View leaderboard for this difficulty">🏆</button>
+        </div>
       </div>
     </div>
   </div>
@@ -184,7 +189,8 @@
               #{{ winResult.puzzleRank }} on this puzzle &middot; #{{ winResult.globalRank }} overall
               <span v-if="winResult.personalBest && winResult.score >= winResult.personalBest && winResult.score === winResult.personalBest" class="victory-pb"> &middot; personal best!</span>
             </div>
-            <div v-if="identity" class="victory-code">You are <b>{{ identity.code }}</b><span v-if="!identity.displayName"> &mdash; save this code to sync devices</span></div>
+            <div v-if="identity && identity.displayName" class="victory-code">You are <b>{{ identity.displayName }}</b></div>
+            <div v-else-if="identity" class="victory-code">Your code: <b>{{ identity.code }}</b> &mdash; save this to sync devices</div>
           </div>
           <div v-else-if="winResult && winResult.error" class="victory-score">
             <div class="victory-score-meta">Score not saved: {{ winResult.error }}</div>
@@ -214,7 +220,20 @@
         :disabled="!identity" @click="leaderboardTab = 'me'">My Scores</button>
     </div>
     <div class="lb-body">
+      <div v-if="leaderboardTab === 'puzzle' && leaderboardContext" class="lb-puzzle-header">
+        <img class="lb-puzzle-thumb" :src="imageThumbFor(leaderboardContext.pack, leaderboardContext.image)" :alt="''">
+        <div class="lb-puzzle-meta">
+          <div class="lb-puzzle-name">{{ imageNameFor(leaderboardContext.pack, leaderboardContext.image) }}</div>
+          <div class="lb-puzzle-sub">{{ packLabelFor(leaderboardContext.pack) }} &middot; {{ leaderboardContext.cols }}&times;{{ leaderboardContext.rows }}</div>
+        </div>
+        <button class="settings-btn" @click="playPuzzle(leaderboardContext.pack, leaderboardContext.image, leaderboardContext.cols)">Play</button>
+      </div>
+
       <div v-if="leaderboardLoading" class="lb-loading">Loading&hellip;</div>
+      <div v-else-if="leaderboardError" class="lb-error">
+        {{ leaderboardError }}
+        <button class="lb-retry" @click="refreshLeaderboard">Retry</button>
+      </div>
 
       <table v-else-if="leaderboardTab === 'puzzle'" class="lb-table">
         <thead><tr><th>#</th><th>Player</th><th>Score</th><th>Moves</th><th>Time</th></tr></thead>
@@ -222,7 +241,7 @@
           <tr v-for="(row, i) in puzzleBoard" :key="row.id"
               :class="{ 'lb-me': identity && row.player_code === identity.code }">
             <td>{{ i + 1 }}</td>
-            <td>{{ row.display_name || row.player_code }}</td>
+            <td>{{ publicNameFor(row) }}</td>
             <td>{{ row.score }}</td>
             <td>{{ row.moves }}</td>
             <td>{{ formatDuration(row.duration_ms) }}</td>
@@ -237,7 +256,7 @@
           <tr v-for="(row, i) in globalBoard" :key="row.player_code"
               :class="{ 'lb-me': identity && row.player_code === identity.code }">
             <td>{{ i + 1 }}</td>
-            <td>{{ row.display_name || row.player_code }}</td>
+            <td>{{ publicNameFor(row) }}</td>
             <td>{{ row.total }}</td>
             <td>{{ row.plays }}</td>
           </tr>
@@ -246,17 +265,21 @@
       </table>
 
       <table v-else-if="leaderboardTab === 'me'" class="lb-table">
-        <thead><tr><th>When</th><th>Pack</th><th>Size</th><th>Moves</th><th>Time</th><th>Score</th></tr></thead>
+        <thead><tr><th>When</th><th>Puzzle</th><th>Size</th><th>Moves</th><th>Time</th><th>Score</th><th></th></tr></thead>
         <tbody>
           <tr v-for="s in myScores" :key="s.id">
-            <td>{{ new Date(s.created_at).toLocaleString() }}</td>
-            <td>{{ packLabelFor(s.pack) }}</td>
+            <td>{{ new Date(s.created_at).toLocaleDateString() }}</td>
+            <td>
+              <a class="lb-link" href="#" @click.prevent="playPuzzle(s.pack, s.image, s.cols)">{{ imageNameFor(s.pack, s.image) }}</a>
+              <div class="lb-sub">{{ packLabelFor(s.pack) }}</div>
+            </td>
             <td>{{ s.cols }}&times;{{ s.rows }}</td>
             <td>{{ s.moves }}</td>
             <td>{{ formatDuration(s.duration_ms) }}</td>
             <td>{{ s.score }}</td>
+            <td><button class="lb-play-btn" @click="playPuzzle(s.pack, s.image, s.cols)" title="Play this puzzle">▶</button></td>
           </tr>
-          <tr v-if="!myScores.length"><td colspan="6" class="lb-empty">No scores yet.</td></tr>
+          <tr v-if="!myScores.length"><td colspan="7" class="lb-empty">No scores yet.</td></tr>
         </tbody>
       </table>
     </div>
@@ -273,15 +296,16 @@
         <div class="settings-label">Your code</div>
         <div class="settings-code">{{ identity.code }}</div>
         <p class="settings-hint">Write this down. Enter it on another device to sync your scores.</p>
+        <button class="settings-btn settings-btn-subtle" @click="signOut">Sign out on this device</button>
       </div>
       <div v-else class="settings-section">
-        <p class="settings-hint">You don't have a code yet. One will be generated the first time you complete a puzzle, or when you claim an existing code below.</p>
+        <p class="settings-hint">You don't have a code yet. Enter a display name below to get one now, or it'll be generated automatically the first time you finish a puzzle.</p>
       </div>
 
       <div class="settings-section">
-        <div class="settings-label">Display name (optional)</div>
+        <div class="settings-label">{{ identity ? 'Display name (optional)' : 'Create account with a name' }}</div>
         <input class="settings-input" v-model="settingsNameInput" maxlength="20" placeholder="Name shown on leaderboards">
-        <button class="settings-btn" @click="saveDisplayName" :disabled="!identity">Save name</button>
+        <button class="settings-btn" @click="saveDisplayName">{{ identity ? 'Save name' : 'Create account' }}</button>
       </div>
 
       <div class="settings-section">
@@ -292,7 +316,7 @@
         <p class="settings-hint">If this device already has scores under a different code, those will be merged into the claimed code.</p>
       </div>
 
-      <div v-if="settingsStatus" class="settings-status-msg">{{ settingsStatus }}</div>
+      <div v-if="settingsStatus.message" :class="['settings-status-msg', 'settings-status-' + (settingsStatus.kind || 'info')]">{{ settingsStatus.message }}</div>
     </div>
   </div>
 
