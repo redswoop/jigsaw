@@ -1,5 +1,20 @@
 /* ---- Base ---- */
 
+:root {
+  /* Signature accent — warm amber, used consistently for active states,
+     CTAs, scores, and hovers. Darker shades reserved for text on amber. */
+  --accent: #ffd780;          /* brighter default */
+  --accent-soft: #f5d27f;     /* slightly desaturated for large fills */
+  --accent-hi: #ffe3a3;       /* hover pop */
+  --accent-deep: #d4b46a;     /* gradient end, borders */
+  --accent-ink: #1a1510;      /* text on amber buttons */
+  --accent-glow: rgba(255, 215, 128, 0.18);
+  --accent-border: rgba(255, 215, 128, 0.45);
+  --accent-tint: rgba(255, 215, 128, 0.12);
+  --danger: #d49a8a;
+  --danger-border: rgba(212, 154, 138, 0.5);
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { min-height: 100%; min-height: -webkit-fill-available; touch-action: manipulation; }
 body { min-height: 100%; }
@@ -140,7 +155,7 @@ body::before {
   font-size: 0.7rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: #f5d27f;
+  color: var(--accent);
   font-weight: 600;
 }
 .resume-title {
@@ -167,13 +182,13 @@ body::before {
 }
 .resume-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #c4a45a, #f5d27f);
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent-hi));
   border-radius: 2px;
   transition: width 0.3s ease;
 }
 .resume-arrow {
   font-size: 1.4rem;
-  color: #c4a45a;
+  color: var(--accent-deep);
   padding: 0 6px;
   flex-shrink: 0;
 }
@@ -316,7 +331,7 @@ body::before {
   font-size: 0.72rem;
   font-weight: 700;
   color: #1a1510;
-  background: linear-gradient(135deg, #f5d27f, #c4a45a);
+  background: linear-gradient(135deg, var(--accent-hi), var(--accent));
   padding: 3px 8px;
   border-radius: 999px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.4);
@@ -350,6 +365,30 @@ body::before {
   letter-spacing: 0.02em;
   color: #e8ddc8;
   line-height: 1.1;
+}
+
+.pack-difficulty-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-tint);
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pack-difficulty-label {
+  text-transform: uppercase;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  opacity: 0.75;
+  font-weight: 500;
 }
 
 .setup-body {
@@ -490,7 +529,7 @@ body::before {
   color: #c4b08a;
   font-weight: 600;
 }
-.difficulty-mine b { color: #f5d27f; }
+.difficulty-mine b { color: var(--accent); }
 .difficulty-top-by {
   opacity: 0.55;
   font-size: 0.68rem;
@@ -508,7 +547,7 @@ body::before {
   align-self: flex-start;
   transition: color 0.15s ease;
 }
-.setup-leaderboard-link:hover { color: #f5d27f; }
+.setup-leaderboard-link:hover { color: var(--accent); }
 
 /* ---- Puzzle Screen ---- */
 
@@ -612,8 +651,8 @@ body::before {
   background: none;
   border: none;
   color: #b0a48a;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
   cursor: pointer;
   display: flex;
@@ -635,14 +674,14 @@ body::before {
   color: #b0a48a;
 }
 .toolbar-btn-accent {
-  color: #c4a45a;
+  color: var(--accent-deep);
 }
 .toolbar-btn-accent:hover {
-  color: #e0c468;
+  color: var(--accent);
   background: rgba(196, 164, 90, 0.12);
 }
 .toolbar-btn-new {
-  color: #e0c468;
+  color: var(--accent);
   background: rgba(196, 164, 90, 0.12);
   border: 1px solid rgba(196, 164, 90, 0.35);
   border-radius: 999px;
@@ -651,7 +690,7 @@ body::before {
   gap: 6px;
 }
 .toolbar-btn-new:hover {
-  color: #f5d27f;
+  color: var(--accent);
   background: rgba(245, 210, 127, 0.18);
   border-color: rgba(245, 210, 127, 0.55);
 }
@@ -734,7 +773,7 @@ body::before {
   color: #9a8d78;
 }
 .settings-checkbox input[type="checkbox"] {
-  accent-color: #c4a45a;
+  accent-color: var(--accent-deep);
 }
 .settings-divider {
   border: none;
@@ -826,13 +865,13 @@ body::before {
   transition: all 0.2s ease;
 }
 .victory-btn-primary {
-  background: linear-gradient(135deg, #c4a45a, #a8893e);
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
   color: #1a1510;
   border: none;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 .victory-btn-primary:hover {
-  background: linear-gradient(135deg, #d4b46a, #b8994e);
+  background: linear-gradient(135deg, var(--accent-hi), var(--accent));
   transform: translateY(-1px);
 }
 .victory-btn-secondary {
@@ -992,12 +1031,12 @@ body::before {
    don't accidentally discard progress. Yes/confirm is destructive and
    visually recedes. */
 .confirm-buttons .confirm-cancel {
-  background: linear-gradient(135deg, #c4a45a, #a8893e);
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
   color: #1a1510;
   border: none;
 }
 .confirm-buttons .confirm-cancel:hover {
-  background: linear-gradient(135deg, #d4b46a, #b8994e);
+  background: linear-gradient(135deg, var(--accent-hi), var(--accent));
 }
 .confirm-buttons .confirm-yes {
   background: transparent;
@@ -1068,8 +1107,8 @@ body::before {
     gap: 4px;
   }
   .toolbar-btn {
-    width: 30px;
-    height: 30px;
+    width: 40px;
+    height: 40px;
   }
   .toolbar-moves {
     font-size: 0.72rem;
@@ -1125,7 +1164,7 @@ body::before {
 .toolbar-score {
   font-size: 0.78rem;
   font-weight: 600;
-  color: #d4a857;
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
   padding: 0 8px;
   letter-spacing: 0.02em;
@@ -1142,7 +1181,7 @@ body::before {
 }
 .puzzle-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, rgba(196, 164, 90, 0.6), #f5d27f);
+  background: linear-gradient(90deg, rgba(196, 164, 90, 0.6), var(--accent));
   transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 0 8px rgba(245, 210, 127, 0.4);
 }
@@ -1158,7 +1197,7 @@ body::before {
   font-size: 3.2rem;
   font-weight: 700;
   font-family: 'Crimson Pro', serif;
-  color: #f5d27f;
+  color: var(--accent);
   line-height: 1;
   text-shadow: 0 2px 20px rgba(0,0,0,0.6);
 }
@@ -1168,7 +1207,7 @@ body::before {
   margin-top: 6px;
   text-shadow: 0 1px 8px rgba(0,0,0,0.8);
 }
-.victory-pb { color: #f5d27f; font-weight: 600; }
+.victory-pb { color: var(--accent); font-weight: 600; }
 .victory-code {
   font-size: 0.85rem;
   opacity: 0.85;
@@ -1206,13 +1245,21 @@ body::before {
   transition: color 0.15s, border-color 0.15s;
 }
 .lb-tab:hover:not(:disabled) { color: #e8ddc8; }
-.lb-tab.active { color: #f5d27f; border-bottom-color: #f5d27f; }
+.lb-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .lb-tab:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .lb-loading, .lb-empty {
   text-align: center;
-  padding: 40px 20px;
+  padding: 64px 20px;
   color: #8a7d6a;
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 1.15rem;
+  font-style: italic;
+  letter-spacing: 0.03em;
+  line-height: 1.6;
+}
+.lb-table tbody:has(> tr:only-child .lb-empty) {
+  /* remove table lines when it's purely an empty state */
 }
 
 .lb-table {
@@ -1276,13 +1323,13 @@ body::before {
   text-decoration: none;
   border-bottom: 1px dashed rgba(245, 210, 127, 0.4);
 }
-.lb-link:hover { color: #f5d27f; border-bottom-color: #f5d27f; }
+.lb-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
 .lb-sub { font-size: 0.75rem; color: #8a7d6a; margin-top: 2px; }
 
 .lb-play-btn {
   background: rgba(245, 210, 127, 0.12);
   border: 1px solid rgba(245, 210, 127, 0.3);
-  color: #f5d27f;
+  color: var(--accent);
   width: 28px;
   height: 28px;
   border-radius: 6px;
@@ -1333,7 +1380,7 @@ body::before {
   font-family: 'DM Sans', sans-serif;
   font-size: 1.1rem;
   letter-spacing: 0.3em;
-  color: #f5d27f;
+  color: var(--accent);
   background: rgba(245, 210, 127, 0.08);
   border: 1px solid rgba(245, 210, 127, 0.3);
   padding: 4px 12px;
@@ -1347,7 +1394,7 @@ body::before {
   border-color: rgba(245, 210, 127, 0.5);
 }
 .settings-copy-flash {
-  color: #f5d27f;
+  color: var(--accent);
   font-size: 0.75rem;
   animation: fadeIn 0.2s ease;
 }
@@ -1414,12 +1461,12 @@ body::before {
   padding: 4px 16px 16px;
 }
 .settings-btn-primary {
-  background: linear-gradient(135deg, #c4a45a, #a8893e);
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
   color: #1a1510;
   border-color: transparent;
 }
 .settings-btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #d4b46a, #b8994e);
+  background: linear-gradient(135deg, var(--accent-hi), var(--accent));
 }
 .settings-footer {
   margin-top: 8px;
@@ -1436,7 +1483,7 @@ body::before {
 .settings-code {
   font-size: 2rem;
   letter-spacing: 0.3em;
-  color: #f5d27f;
+  color: var(--accent);
   font-family: 'DM Sans', sans-serif;
   font-weight: 600;
 }
@@ -1458,7 +1505,7 @@ body::before {
   box-sizing: border-box;
   margin-bottom: 10px;
 }
-.settings-input:focus { outline: none; border-color: #f5d27f; }
+.settings-input:focus { outline: none; border-color: var(--accent); }
 .settings-input-code {
   letter-spacing: 0.25em;
   text-transform: uppercase;
@@ -1467,7 +1514,7 @@ body::before {
 .settings-btn {
   background: rgba(245, 210, 127, 0.15);
   border: 1px solid rgba(245, 210, 127, 0.4);
-  color: #f5d27f;
+  color: var(--accent);
   padding: 9px 18px;
   border-radius: 8px;
   font-family: inherit;

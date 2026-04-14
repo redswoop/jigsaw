@@ -86,6 +86,12 @@
     <header class="setup-header">
       <button class="back-btn" @click="navigateTo('picker')">&larr;</button>
       <h2>{{ selectedImageName || 'Choose Difficulty' }}</h2>
+      <span v-if="currentPack && currentPack.difficulty && currentPack.difficulty !== 1"
+            class="pack-difficulty-badge"
+            :title="'Score multiplier: ×' + currentPack.difficulty">
+        ×{{ currentPack.difficulty }}
+        <span class="pack-difficulty-label">{{ currentPack.label || '' }}</span>
+      </span>
     </header>
     <div class="setup-body">
       <div class="setup-preview">
