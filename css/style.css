@@ -252,6 +252,80 @@ body::before {
   letter-spacing: 0.04em;
 }
 
+/* Pack card — position relative for overlay + download button */
+.pack-card { position: relative; }
+
+.pack-download-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #d4c5a8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  padding: 0;
+  z-index: 2;
+}
+.pack-download-btn:hover { background: rgba(0,0,0,0.75); color: var(--accent); }
+.pack-download-btn.downloading { cursor: default; }
+.download-ring { width: 24px; height: 24px; color: var(--accent); }
+.download-ring circle { transition: stroke-dashoffset 0.3s; }
+
+.pack-cached-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  color: var(--accent);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pack-card-offline {
+  cursor: default;
+}
+.pack-card-offline:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(255,255,255,0.06);
+}
+.pack-card-offline .pack-card-mosaic {
+  opacity: 0.35;
+  filter: grayscale(0.6);
+}
+
+.pack-offline-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  pointer-events: none;
+}
+.pack-offline-overlay span {
+  background: rgba(0,0,0,0.7);
+  color: #8a7d6a;
+  font-size: 0.8rem;
+  padding: 6px 14px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+}
+
 /* ---- Picker Screen ---- */
 
 .screen-picker {

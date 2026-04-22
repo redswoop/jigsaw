@@ -1,15 +1,22 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Tests run against the production server on a dedicated port so they don't
+// fight `bun run dev` (5173 is frequently occupied by other projects like
+// decklistgen). Override with TEST_PORT=NNNN if 5174 collides.
+const TEST_PORT = Number(process.env.TEST_PORT) || 5174;
+const TEST_DATA_DIR = '/tmp/jigsaw-playwright-data';
+const TEST_BUGS_DIR = '/tmp/jigsaw-playwright-bugs';
+
 export default defineConfig({
   testDir: './tests',
   timeout: 30_000,
   retries: 0,
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: `http://localhost:${TEST_PORT}`,
   },
   webServer: {
-    command: 'bun run dev',
-    port: 5173,
+    command: `PORT=${TEST_PORT} DATA_DIR=${TEST_DATA_DIR} BUGS_DIR=${TEST_BUGS_DIR} bun server.js`,
+    port: TEST_PORT,
     reuseExistingServer: true,
     timeout: 15_000,
   },

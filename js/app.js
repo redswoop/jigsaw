@@ -19,6 +19,78 @@ createApp({
     // Scroll to top on screen change
     watch(currentScreen, () => window.scrollTo(0, 0));
 
+    // --- Online / offline state ---
+    const isOnline = ref(navigator.onLine);
+    window.addEventListener('online', () => isOnline.value = true);
+    window.addEventListener('offline', () => isOnline.value = false);
+
+    // --- Pack offline availability ---
+    const cachedPacks = ref(new Set());       // pack names fully cached
+    const downloadingPack = ref(null);        // pack name currently downloading
+    const downloadProgress = ref(0);          // 0–1
+
+    function allPackUrls(pack) {
+      const urls = [];
+      for (const img of pack.images) {
+        urls.push('/' + img);
+        if (pack.thumbnails?.[img]) urls.push('/' + pack.thumbnails[img]);
+      }
+      return urls;
+    }
+
+    async function refreshCachedPacks() {
+      if (!navigator.serviceWorker?.controller) return;
+      for (const pack of packs.value) {
+        const urls = allPackUrls(pack);
+        const cached = await querySWCached(urls);
+        if (cached.length === urls.length) {
+          cachedPacks.value = new Set([...cachedPacks.value, pack.name]);
+        } else {
+          const next = new Set(cachedPacks.value);
+          next.delete(pack.name);
+          cachedPacks.value = next;
+        }
+      }
+    }
+
+    function querySWCached(urls) {
+      return new Promise(resolve => {
+        const handler = e => {
+          if (e.data?.type === 'query-cached-result') {
+            navigator.serviceWorker.removeEventListener('message', handler);
+            resolve(e.data.cached);
+          }
+        };
+        navigator.serviceWorker.addEventListener('message', handler);
+        navigator.serviceWorker.controller.postMessage({ type: 'query-cached', urls });
+      });
+    }
+
+    function downloadPack(pack, evt) {
+      if (evt) { evt.stopPropagation(); evt.preventDefault(); }
+      if (downloadingPack.value || !navigator.serviceWorker?.controller) return;
+      downloadingPack.value = pack.name;
+      downloadProgress.value = 0;
+      const urls = allPackUrls(pack);
+      const handler = e => {
+        if (e.data?.type === 'cache-progress' && e.data.id === pack.name) {
+          downloadProgress.value = e.data.done / e.data.total;
+          if (e.data.done === e.data.total) {
+            navigator.serviceWorker.removeEventListener('message', handler);
+            cachedPacks.value = new Set([...cachedPacks.value, pack.name]);
+            downloadingPack.value = null;
+            downloadProgress.value = 0;
+          }
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handler);
+      navigator.serviceWorker.controller.postMessage({ type: 'cache-urls', urls, id: pack.name });
+    }
+
+    function isPackAvailable(pack) {
+      return isOnline.value || cachedPacks.value.has(pack.name);
+    }
+
     // --- History / back button support ---
     let suppressPopState = false;
 
@@ -404,7 +476,8 @@ createApp({
         game.saveState();    // persist the flag so a reload doesn't re-submit
       } catch (e) {
         console.warn('score submit failed:', e);
-        game.winResult.value = { error: e.message || String(e) };
+        const msg = !navigator.onLine ? "You're offline — score will not be saved" : (e.message || String(e));
+        game.winResult.value = { error: msg };
       } finally {
         submittingScore = false;
       }
@@ -725,6 +798,7 @@ createApp({
       history.replaceState({ screen: 'home' }, '', '');
 
       await loadPacks();
+      refreshCachedPacks();
       refreshResumable();
       // Drop stale identity if server no longer knows about it (e.g. DB was reset)
       identity.value = await validateIdentity();
@@ -807,6 +881,8 @@ createApp({
       // Packs
       packs, currentPack, packPreviewImages, thumb,
       selectedImage, selectedImageDims, pieceCountForCols,
+      isOnline, cachedPacks, downloadingPack, downloadProgress,
+      downloadPack, isPackAvailable,
 
       // Navigation
       goHome, selectPackAndGo, selectImageAndGo, startPuzzle,

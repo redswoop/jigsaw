@@ -497,7 +497,9 @@ async function handleRequest(req, res) {
       'Content-Type': mime,
       'Accept-Ranges': 'bytes',
     };
-    if (ext === '.html' || ext === '.js' || ext === '.css') {
+    const base = path.basename(fullPath);
+    if (base === 'sw.js') headers['Service-Worker-Allowed'] = '/';
+    if (ext === '.html' || ext === '.js' || ext === '.css' || base === 'manifest.json') {
       headers['Cache-Control'] = 'no-cache';
       headers['ETag'] = `"${fileSize}-${stat.mtimeMs}"`;
     } else {

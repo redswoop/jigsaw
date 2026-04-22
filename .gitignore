@@ -6,3 +6,6 @@ bun.lock
 *.mp4
 .env
 .env.*
+.playwright-mcp/
+test-results/
+playwright-report/
